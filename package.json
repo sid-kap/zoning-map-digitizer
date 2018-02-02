@@ -1,0 +1,29 @@
+{
+  "dependencies": {
+    "ace-css": "^1.1.0",
+    "css-loader": "^0.28.9",
+    "dts-gen": "^0.5.7",
+    "dtsmake": "^0.0.10",
+    "elm-webpack-loader": "^4.4.0",
+    "expose-loader": "^0.7.4",
+    "file-loader": "^1.1.6",
+    "font-awesome": "^4.7.0",
+    "foreman": "^2.0.0",
+    "fs": "^0.0.1-security",
+    "json-server": "^0.12.1",
+    "opencv.js": "^1.2.1",
+    "pdfjs-dist": "^2.0.305",
+    "style-loader": "^0.20.1",
+    "ts-loader": "^3.4.0",
+    "typescript": "^2.7.1",
+    "url-loader": "^0.6.2",
+    "webpack": "^3.10.0",
+    "webpack-dev-server": "^2.11.1"
+  },
+  "scripts": {
+    "api": "node api.js",
+    "build": "webpack",
+    "client": "webpack-dev-server --port 3000",
+    "start": "nf start"
+  }
+}
