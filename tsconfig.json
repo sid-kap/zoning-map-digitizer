@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "sourceMap": true,
-    "lib": [ "ES6", "DOM" ],
-    // "allowJs": true,
-    // "checkJs": true
+    "lib": [ "ES6", "DOM", "es2017.object" ],
+    "jsx": "react",
+    "allowJs": true,
   }
 }

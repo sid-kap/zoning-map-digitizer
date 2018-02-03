@@ -1,10 +1,10 @@
 {
   "dependencies": {
+    "@types/react": "^16.0.36",
     "ace-css": "^1.1.0",
     "css-loader": "^0.28.9",
     "dts-gen": "^0.5.7",
     "dtsmake": "^0.0.10",
-    "elm-webpack-loader": "^4.4.0",
     "expose-loader": "^0.7.4",
     "file-loader": "^1.1.6",
     "font-awesome": "^4.7.0",
@@ -13,6 +13,8 @@
     "json-server": "^0.12.1",
     "opencv.js": "^1.2.1",
     "pdfjs-dist": "^2.0.305",
+    "react": "^16.2.0",
+    "react-dom": "^16.2.0",
     "style-loader": "^0.20.1",
     "ts-loader": "^3.4.0",
     "typescript": "^2.7.1",
@@ -22,8 +24,8 @@
   },
   "scripts": {
     "api": "node api.js",
-    "build": "webpack",
-    "client": "webpack-dev-server --port 3000",
+    "build": "node --max_old_space_size=4096 node_modules/webpack/bin/webpack.js",
+    "client": "node --max_old_space_size=4096 node_modules/webpack-dev-server/bin/webpack-dev-server.js --port 3000",
     "start": "nf start"
   }
 }

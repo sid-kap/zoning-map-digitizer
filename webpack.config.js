@@ -28,11 +28,11 @@ module.exports = {
                 exclude: /node_modules/,
                 loader:  'file-loader?name=[name].[ext]',
             },
-            {
-                test:    /\.elm$/,
-                exclude: [/elm-stuff/, /node_modules/],
-                loader:  'elm-webpack-loader?verbose=true&warn=true',
-            },
+            // {
+            //     test:    /\.elm$/,
+            //     exclude: [/elm-stuff/, /node_modules/],
+            //     loader:  'elm-webpack-loader?verbose=true&warn=true',
+            // },
             {
                 test:    /\.tsx?$/,
                 exclude: [/elm-stuff/, /node_modules/],
@@ -75,8 +75,14 @@ module.exports = {
     devServer: {
         inline: true,
         stats: { colors: true },
+
+        contentBase: path.join(__dirname, "dist"),
     },
 
-    node: { fs: 'empty' }
+    node: { fs: 'empty' },
+
+    // minify: {
+    //     mangle: false,
+    // },
 
 };
