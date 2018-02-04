@@ -1,12 +1,18 @@
+// Apparently I have to do this for my local bindings to work... not sure why.
+// const cv = require("opencv.js")
 import * as cv from "opencv.js"
-import { PDFJS } from "pdfjs-dist"
+
+import { PDFJSStatic } from "pdfjs-dist"
+let PDFJS: PDFJSStatic = require("pdfjs-dist")
 
 // PDFJS.workerSrc = '../pdf.worker.bundle.js';
+// var PDFJS: PDFJSStatic
 
 async function pdfToPng(pdfUrl: string): Promise<string> {
     let response = await fetch(pdfUrl)
     let pdfArray = await response.arrayBuffer()
-    let pdf = await PDFJS.getDocument(pdfArray)
+    // ArrayBuffer worked for me earlier, just doing this conversion to please the type-checker
+    let pdf = await PDFJS.getDocument(new Uint8Array(pdfArray))
     let page = await pdf.getPage(1)
 
     let canvas = <HTMLCanvasElement> document.querySelector("canvas#pdfConversion")
@@ -15,22 +21,112 @@ async function pdfToPng(pdfUrl: string): Promise<string> {
         viewport: page.getViewport(1)
     })
     let png = canvas.toDataURL("image/png")
+    canvas.style.display = "none"
     return png
 }
 
 function getHighSaturationRegion(img: cv.Mat): cv.Mat {
-    let hsv = cv.Mat()
+    let hsv = new cv.Mat()
     cv.cvtColor(img, hsv, cv.COLOR_RGB2HSV)
-    let layers = cv.MatVector()
+    let layers = new cv.MatVector()
     cv.split(hsv, layers)
     let saturation = layers.get(1)
     return saturation
 }
 
-async function pdfToImgArray(pdfUrl: string): Promise<cv.Mat> {
-    let response = await fetch(pdfUrl)
-    let pdfArray = await response.arrayBuffer()
-    let pdf = await PDFJS.getDocument(pdfArray)
+export type Params = {
+    maxComputeDimension: number,
+    saturationThreshold: number,
+    distanceToHighSaturation: number,
+    polyAccuracy: number,
+}
+
+const defaultParams: Params = {
+    maxComputeDimension: 1000,
+    saturationThreshold: 20,
+    distanceToHighSaturation: 5,
+    polyAccuracy: 10,
+}
+
+let paramsValue: Params = defaultParams
+
+async function fileChanged(e: Event) {
+    let input = <any> document.querySelector("input[name=file]")
+    let fileList: FileList = input.files
+    let file: File = fileList[0]
+    let fileReader = new FileReader()
+    let buffer: ArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        fileReader.onload = () => resolve(fileReader.result)
+        fileReader.onerror = err => reject(err)
+
+        fileReader.readAsArrayBuffer(file)
+    })
+    let mat = await pdfToImgArray(buffer)
+    let largestPart = largestSaturatedPart(mat, paramsValue)
+    cv.imshow("output", largestPart)
+
+    let outputCanvas = <HTMLCanvasElement> document.querySelector("canvas#output")
+    outputCanvas.style.display = "none"
+    let output = outputCanvas.toDataURL()
+
+    let resultLink = document.createElement("a")
+    resultLink.href = output
+    resultLink.innerHTML = "Download result"
+    document.querySelector("div#main").appendChild(resultLink)
+}
+
+export function main() {
+    // Make all the HTML elements here because (1) I'm a savage and (2) this is strongly typed, yo.
+    const main = document.querySelector("div#main")
+
+    const fileInput = document.createElement("input")
+    fileInput.type = "file"
+    fileInput.multiple = false
+    fileInput.name = "file"
+    fileInput.onchange = fileChanged
+    const fileLabel = document.createElement("label")
+    fileLabel.innerHTML = "Upload PDF file"
+    fileLabel.appendChild(fileInput)
+
+    function makeNumberInput(name: string, labelText: string) {
+        const input = document.createElement("input")
+        input.type = "number"
+        input.name = name
+        input.onchange = () => console.log("changed")
+
+        const label = document.createElement("label")
+        label.innerText = labelText
+        label.appendChild(input)
+        return label
+    }
+    const maxComputeDimension = makeNumberInput("maxComputeDimension", "Max image dimension")
+    const saturationThreshold = makeNumberInput("saturationThreshold", "Saturation threshold")
+    const distanceToHighSaturation = makeNumberInput("distanceToHighSaturation", "Distance to high saturation")
+    const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy")
+
+    const hiddenCanvas = document.createElement("canvas")
+    hiddenCanvas.style.display = "none"
+    hiddenCanvas.id = "pdfConversion"
+
+    const outputCanvas = document.createElement("canvas")
+    outputCanvas.id = "output"
+
+    main.appendChild(fileLabel)
+    main.appendChild(document.createElement("br"))
+    main.appendChild(maxComputeDimension)
+    main.appendChild(document.createElement("br"))
+    main.appendChild(distanceToHighSaturation)
+    main.appendChild(document.createElement("br"))
+    main.appendChild(polyAccuracy)
+    main.appendChild(document.createElement("br"))
+    main.appendChild(hiddenCanvas)
+    main.appendChild(outputCanvas)
+}
+
+async function pdfToImgArray(buffer: ArrayBuffer): Promise<cv.Mat> {
+    // let response = await fetch(pdfUrl)
+    // let pdfArray = await response.arrayBuffer()
+    let pdf = await PDFJS.getDocument(new Uint8Array(buffer))
     let page = await pdf.getPage(1)
     let viewport = page.getViewport(1)
     // let viewport = page.getViewport(0.3)
@@ -51,6 +147,7 @@ async function pdfToImgArray(pdfUrl: string): Promise<cv.Mat> {
     console.log("got image array!")
 
     let mat = cv.matFromImageData(imageData)
+    canvas.style.display = "none"
     console.log("made mat!")
     console.log(mat.size())
     console.log(mat.depth())
@@ -90,9 +187,8 @@ async function pngToImgArray(pngUrl: string): Promise<cv.Mat> {
 }
 
 // TODO Leaks memory. Need to call delete() on the matrices after I'm done
-function largestSaturatedPart(img: cv.Mat) {
-    const maxDimen = 1000
-    const ratio = Math.max(img.rows / maxDimen, img.cols / maxDimen)
+function largestSaturatedPart(img: cv.Mat, params: Params) {
+    const ratio = Math.max(img.rows / params.maxComputeDimension, img.cols / params.maxComputeDimension)
 
     const scaledDown = new cv.Mat()
     cv.resize(img, scaledDown, {width: img.cols / ratio, height: img.rows / ratio})
@@ -103,14 +199,15 @@ function largestSaturatedPart(img: cv.Mat) {
     cv.split(hsv, layers)
     const saturation = layers.get(1)
     const threshed = new cv.Mat()
-    cv.threshold(saturation, threshed, 255 / 5, 255, cv.THRESH_BINARY)
-    cv.imshow("output", threshed)
+    cv.threshold(saturation, threshed, params.saturationThreshold, 255, cv.THRESH_BINARY)
+    // cv.imshow("output", threshed)
 
     const main_part = new cv.Mat()
-    cv.blur(threshed, main_part, new cv.Size(5,5))
+    cv.blur(threshed, main_part,
+            {width: params.distanceToHighSaturation, height: params.distanceToHighSaturation})
     const main_part_thres = new cv.Mat()
     cv.threshold(main_part, main_part_thres, 20, 255, cv.THRESH_BINARY)
-    cv.imshow("output", main_part_thres)
+    // cv.imshow("output", main_part_thres)
 
     console.log("finished threshing")
 
@@ -129,7 +226,7 @@ function largestSaturatedPart(img: cv.Mat) {
 
     const sortedHist = Object.entries(hist).sort((x,y) => y[1] - x[1])
     console.log(sortedHist)
-    const secondLargest = sortedHist[1][0]
+    const secondLargest: number = +sortedHist[1][0]
 
     const largestComponentImg = new cv.Mat()
     const secondLargestMat = cv.matFromArray(1,1, cv.CV_8UC1, [secondLargest]);
@@ -161,14 +258,14 @@ function largestSaturatedPart(img: cv.Mat) {
     const limitedImg = new cv.Mat()
     // scaledDown.copyTo(limitedImg, mask)
     img.copyTo(limitedImg, bigMask)
-    cv.imshow("output", limitedImg)
+    return limitedImg
 }
 
-export function fetchBerkeley() {
+export function fetchBerkeley(params: Params) {
     pngToImgArray("/assets/berkeley.png").then(function(img) {
         console.log("Finished!")
         console.log(img)
-        largestSaturatedPart(img)
+        largestSaturatedPart(img, params)
     })
     return 5
 }

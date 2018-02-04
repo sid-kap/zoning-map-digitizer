@@ -1,20 +1,21 @@
 // @ts-check
 'use strict';
 
-require('ace-css/css/ace.css');
+// require('ace-css/css/ace.css');
 
-require('font-awesome/css/font-awesome.css');
+// require('font-awesome/css/font-awesome.css');
 
 // Require index.html so it gets copied to dist
 require('./index.html');
 
 var Lib = require('./Lib.ts');
-var Main = require('./Main.tsx');
+Lib.main();
+// var Main = require('./Main.tsx');
 
-var React = require('react');
-var ReactDOM = require('react-dom');
+// var React = require('react');
+// var ReactDOM = require('react-dom');
 
-ReactDOM.render(React.createElement(Main.App, null), document.getElementById('main'));
+// ReactDOM.render(React.createElement(Main.App, null), document.getElementById('main'));
 
 // var Elm = require('./Main.elm');
 // var mountNode = document.getElementById('main');

@@ -5,7 +5,6 @@ module.exports = {
         app: [
             './src/index.js'
         ],
-        // 'pdf.worker': 'pdfjs-dist/build/pdf.worker.entry'
     },
 
     output: {

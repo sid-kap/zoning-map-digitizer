@@ -1,18 +1,15 @@
 import * as React from "react"
 import * as DOM from "react-dom"
+import * as Lib from "./Lib.ts"
 
-type Params = {
-    maxComputeDimension: number,
-    saturationThreshold: number,
-    distanceToHighSaturation: number,
-    polyAccuracy: number,
-}
-/* type PartialParams = Pick<Params, "maxComputeDimension" | "saturationThreshold" | "distanceToHighSaturation" | "polyAccuracy">*/
+// type PartialParams = Pick<Params, "maxComputeDimension" | "saturationThreshold" | "distanceToHighSaturation" | "polyAccuracy">
 
-class ParamsForm extends React.Component<{},Params> {
+/*
+class ParamsForm extends React.Component<{},Lib.Params> {
     constructor(props: {}) {
         super(props)
         this.state = {
+            files: new FileList(),
             maxComputeDimension: 1000,
             saturationThreshold: 20,
             distanceToHighSaturation: 5,
@@ -31,6 +28,11 @@ class ParamsForm extends React.Component<{},Params> {
     public render() {
         return (
             <form>
+                <label> PDF file:
+                <input type="file" multiple={false}
+                       value={this.state.files}
+                       onChange={e => this.setState({files: e.target.files}, this.update)} />
+                </label><br />
                 <label> Max compute dimension:
                     <input type="number"
                            value={this.state.maxComputeDimension}
@@ -67,3 +69,4 @@ export function App() {
         </div>
     );
 }
+*/

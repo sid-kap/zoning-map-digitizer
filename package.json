@@ -1,6 +1,8 @@
 {
   "dependencies": {
+    "@types/pdfjs-dist": "^0.1.1",
     "@types/react": "^16.0.36",
+    "@types/react-dom": "^16.0.3",
     "ace-css": "^1.1.0",
     "css-loader": "^0.28.9",
     "dts-gen": "^0.5.7",
@@ -24,8 +26,8 @@
   },
   "scripts": {
     "api": "node api.js",
-    "build": "node --max_old_space_size=4096 node_modules/webpack/bin/webpack.js",
-    "client": "node --max_old_space_size=4096 node_modules/webpack-dev-server/bin/webpack-dev-server.js --port 3000",
+    "build": "node --max_old_space_size=6000 node_modules/webpack/bin/webpack.js",
+    "client": "node --max_old_space_size=6000 node_modules/webpack-dev-server/bin/webpack-dev-server.js --port 3000",
     "start": "nf start"
   }
 }
