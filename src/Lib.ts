@@ -77,7 +77,6 @@ async function pdfToImgArray(buffer: ArrayBuffer): Promise<cv.Mat> {
     console.log("page rendered")
 
     let imageData = context.getImageData(0, 0, canvas.width, canvas.height)
-    console.log("got image array!")
 
     let mat = cv.matFromImageData(imageData)
     canvas.style.display = "none"
@@ -153,7 +152,7 @@ function compute(img: cv.Mat, params: Params) {
 
     // Do k-means to get the colors from the scaledDown image.
     // (We use the smaller image because it's faster.)
-    const {labels, centers} = getColors(smallerMaskedImage, 20)
+    const centers = getColors(smallerMaskedImage, 20)
 
     const largeImageLabeled = labelImageByColors(maskedImage, centers)
 
@@ -253,12 +252,13 @@ function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Params):
     return {maskedImage, smallerMaskedImage}
 }
 
-function getColors(img: cv.Mat, K: number): {labels: cv.Mat, centers: cv.Mat} {
+function getColors(img: cv.Mat, K: number): cv.Mat {
     const labels = new cv.Mat()
     const centers = new cv.Mat()
-    const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 100, 0.1)
-    // const flags = cv.KMEANS_PP_CENTERS
-    const flags = cv.KMEANS_RANDOM_CENTERS
+    // const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 100, 0.1)
+    const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 10, 1)
+    const flags = cv.KMEANS_PP_CENTERS
+    // const flags = cv.KMEANS_RANDOM_CENTERS
 
     let continuousImg
     if (img.isContinuous()) {
@@ -270,12 +270,31 @@ function getColors(img: cv.Mat, K: number): {labels: cv.Mat, centers: cv.Mat} {
 
     // from R x C x 3 matrix to (R*C) x 3 x 1 matrix
     console.log("about to reshape")
-    console.log(img.rows + " " + img.cols + " " + img.channels() + " " + img.data.length)
-    const pixels = reshapeMat(img, img.rows * img.cols, img.channels(), cv.CV_32F)
-    console.log("reshaped")
-    cv.kmeans(pixels, K, labels, criteria, 1, flags, centers)
+    const imgFloat = new cv.Mat()
+    img.convertTo(imgFloat, cv.CV_32F)
+    debugMatrix(img)
+    debugMatrix(imgFloat)
+    const pixels = cv.matFromArray(imgFloat.rows * imgFloat.cols,
+                                   imgFloat.channels(), cv.CV_32F,
+                                   Array.from(imgFloat.data32F))
+    debugMatrix(pixels)
+    console.log("done reshaping")
+    cv.kmeans(pixels, K, labels, criteria, 10, flags, centers)
+    console.log("Kmeans finished")
 
-    return {labels, centers}
+    const centers8U = cv.matFromArray(centers.rows, centers.cols, cv.CV_8U,
+                                      Array.from(centers.data32F))
+
+    imgFloat.delete()
+    pixels.delete()
+    labels.delete()
+    centers.delete()
+
+    return centers8U
+}
+
+function debugMatrix(mat: cv.Mat) {
+    console.log(`${mat.rows} ${mat.cols} ${mat.channels()} ${mat.type()} ${mat.data.length} ${mat.data32F.length}`)
 }
 
 // Returns a new image, same size as `img` (but with only one channel), where each
@@ -303,6 +322,13 @@ function labelImageByColors(img: cv.Mat, colors: cv.Mat): cv.Mat {
     if (numChannels != 3) {
         throw new Error("This code only works with 3-channel images.")
     }
+    if (img.type() != cv.CV_8UC3) {
+        throw new Error("img should be unsigned 8-bit 3-channel")
+    }
+    if (colors.type() != cv.CV_8UC3) {
+        throw new Error("colors should be unsigned 8-bit 3-channel")
+    }
+    console.log(colors.data)
 
     // Premature optimization
     const colorsData = colors.data
@@ -338,7 +364,7 @@ function reshapeMat(mat: cv.Mat, rows: number, cols: number, newTpe: cv.MatType)
     // should check that rows * cols * new channels = old rows * cols * channels
     // but idk how, sounds v tedious
     // so use this function very carefully
-    return cv.matFromArray(rows, cols, newTpe, mat.data)
+    return cv.matFromArray(rows, cols, newTpe, Array.from(mat.data))
 }
 
 // To clear canvas:

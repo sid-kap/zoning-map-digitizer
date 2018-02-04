@@ -25,14 +25,23 @@ declare module "opencv.js" {
         readonly rows: number
         readonly cols: number
 
-        data: any
+        data: Uint8Array
+        data8S: Uint8Array
+        data64F: Float64Array
+        data32S: Int32Array
+        data32F: Float32Array
+        data16U: Uint16Array
+        data16S: Int16Array
 
         size(): Size
         channels(): number
+        type(): MatType
 
         clone(): Mat
 
         copyTo(dst: Mat, mask: Mat)
+
+        convertTo(dst: Mat, rtype: MatType, alpha?: number, beta?: number)
 
         // reshape(channels: number, rows?: number): Mat
 
