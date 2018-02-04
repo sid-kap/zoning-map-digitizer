@@ -28,10 +28,15 @@ declare module "opencv.js" {
         data: any
 
         size(): Size
+        channels(): number
 
         clone(): Mat
 
         copyTo(dst: Mat, mask: Mat)
+
+        // reshape(channels: number, rows?: number): Mat
+
+        isContinuous(): bool
 
         delete()
     }
@@ -414,4 +419,42 @@ declare module "opencv.js" {
                                                  ltype?: CV_32S | CV_16U)
     export function connectedComponents(image: Mat, labels:Mat,
                                         connectivity?: number, ltype?: CV_32S | CV_16U)
+
+    // type of data must be CV_32F, CV_32FC2, or CV_32FC2
+    export function kmeans(data: Mat, K: number, bestLabels: Mat,
+                           criteria: TermCriteria, attempts: number,
+                           flags: KMeansFlags, centers?: Mat)
+
+    export class TermCriteria {
+        constructor()
+        constructor(tpe: TermCriteriaType, maxCount: number, epsilon: number)
+    }
+    type TermCriteriaType = TermCriteria_COUNT | TermCriteria_MAX_ITER | TermCriteria_EPS
+    export const TermCriteria_COUNT: number
+    export const TermCriteria_MAX_ITER: number
+    export const TermCriteria_EPS: number
+
+    export interface KMeansFlags {}
+    export const KMEANS_RANDOM_CENTERS: KMeansFlags
+    export const KMEANS_PP_CENTERS: KMeansFlags
+    export const KMEANS_USE_INITIAL_LABELS: KMeansFlags
+
+    // export class CVKNearest {
+    //     constructor()
+    //     constructor(trainData: Mat, responses: Mat, sampleIdx?: Mat, isRegression?: bool,
+    //                 max_k?: number)
+
+    //     train(trainData: Mat, responses: Mat, sampleIdx?: Mat, isRegression?: bool,
+    //           maxK?: number, updateBase?: bool): bool
+
+    //     findNearest(samples: Mat, k: number, results: Mat, neighborResponses: Mat, dists: Mat): number
+
+    //     get_max_k(): number
+
+    //     get_var_count(): number
+
+    //     get_sample_count(): number
+
+    //     is_regression(): bool
+    // }
 }
