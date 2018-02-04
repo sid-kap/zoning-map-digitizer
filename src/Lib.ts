@@ -81,9 +81,9 @@ async function pdfToImgArray(buffer: ArrayBuffer): Promise<cv.Mat> {
     let mat = cv.matFromImageData(imageData)
     canvas.style.display = "none"
     console.log("made mat!")
-    console.log(mat.size())
-    console.log(mat.depth())
-    console.log(mat.channels())
+    // console.log(mat.size())
+    // console.log(mat.depth())
+    // console.log(mat.channels())
     return mat
 }
 
@@ -141,7 +141,7 @@ async function fileChanged(e: Event) {
     document.querySelector("div#main").appendChild(resultLink)
 }
 
-function compute(img: cv.Mat, params: Params) {
+function compute(img: cv.Mat, params: Params): cv.Mat {
     const ratio = Math.max(img.rows / params.maxComputeDimension, img.cols / params.maxComputeDimension)
 
     const scaledDown = new cv.Mat()
@@ -152,11 +152,114 @@ function compute(img: cv.Mat, params: Params) {
 
     // Do k-means to get the colors from the scaledDown image.
     // (We use the smaller image because it's faster.)
-    const centers = getColors(smallerMaskedImage, 20)
+    const numColors = 25
+    const centers = getColors(smallerMaskedImage, numColors)
 
-    const largeImageLabeled = labelImageByColors(maskedImage, centers)
+    const {labeledByColorIndex: largeImageColor, labeledRGB: largeImageQuantized} = labelImageByColors(maskedImage, centers)
 
-    return largeImageLabeled
+    console.log("Histogram of colors in image:")
+    const hist = imageHist(largeImageColor, numColors)
+    console.log(hist)
+    const largestColor = hist[0][0]
+
+    const polygons = new Array<cv.Mat>()
+    const main = document.querySelector("div#main")
+
+    for (let i = 0; i < numColors; i++) {
+        // Skip the background color
+        if (i != largestColor) {
+            console.log(`Computing polygons for color ${i}`)
+            const polys = getColorPolygons(largeImageColor, i)
+            polygons.push(polys)
+
+            let canvas = document.createElement("canvas")
+            main.appendChild(canvas)
+            canvas.id = `color-${i}`
+            cv.imshow(`color-${i}`, polys)
+        }
+    }
+
+    scaledDown.delete()
+    maskedImage.delete()
+    smallerMaskedImage.delete()
+    centers.delete()
+
+    return largeImageQuantized
+}
+
+function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): cv.Mat {
+    const mask = new cv.Mat()
+    const colorIndexMat = cv.matFromArray(1,1, cv.CV_8U, [colorIndex])
+    cv.compare(labeledByColorIndex, colorIndexMat, mask, cv.CMP_EQ)
+    console.log("finished masking")
+
+    const blurred = new cv.Mat()
+    cv.blur(mask, blurred, {width: 10, height: 10})
+
+    const threshed = new cv.Mat()
+    cv.threshold(blurred, threshed, 20, 255, cv.THRESH_BINARY)
+
+    // const dilated = new cv.Mat()
+    // const kernel = cv.Mat.ones(10, 10, cv.CV_8U)
+    // cv.dilate(mask, dilated, kernel)
+    // console.log("finished dilating")
+    console.log("finished blurring and threshing")
+
+    // cv.imshow("output", dilated)
+    cv.imshow("output", threshed)
+
+    // const labels = new cv.Mat()
+    // const numComponents = cv.connectedComponents(dilated, labels)
+    // console.log(`numComponents = ${numComponents}`)
+
+    mask.delete()
+    colorIndexMat.delete()
+    blurred.delete()
+
+    return threshed
+    // firs
+
+    // const contours = new cv.MatVector()
+    // cv.findContours(dilated, contours, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    // console.log("found contours")
+
+    // const simpleContours = new cv.MatVector()
+    // for (let i = 0; i < contours.size(); i++) {
+    //     const contour = contours.get(i)
+    //     const approxCurve = new cv.Mat()
+    //     cv.approxPolyDP(contour, approxCurve, 10, true)
+    //     simpleContours.push_back(approxCurve)
+    // }
+    // console.log("found approx polygons")
+
+    // const polygonsFound = new cv.Mat(labeledByColorIndex.size(), cv.CV_8UC3)
+    // for (let i = 0; i < simpleContours.size(); i++) {
+    //     cv.drawContours(polygonsFound, simpleContours, i, [255,0,0,0],
+    //                     4 // thickness
+    //                    )
+    // }
+    // console.log("drew polygons")
+
+    // return polygonsFound
+
+}
+
+// computes histogram of an image, assuming image type is integral (not floating)
+// and the values in the image are integers in [0, numValues)
+function imageHist(img: cv.Mat, numValues: number): [number, number][] {
+    const hist = new Array<number>()
+    for (let i = 0; i < numValues; i++) hist[i] = 0;
+    for (let ix in img.data) hist[img.data[ix]] += 1;
+
+    const sortedHist = Object.entries(hist).sort((x,y) => y[1] - x[1])
+
+    // acrobatics to convince the compiler that this does, indeed, return an array
+    // where each element is an array of length 2, and contains numbers
+    const retArray = new Array<[number, number]>()
+    for (let ix = 0; ix < numValues; ix++) retArray.push([+sortedHist[ix][0], +sortedHist[ix][1]])
+    // console.log(retArray)
+
+    return retArray
 }
 
 function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Params):
@@ -181,20 +284,12 @@ function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Params):
     console.log("finished threshing")
 
     const labels = new cv.Mat()
-    const stats = new cv.Mat()
-    const centroids = new cv.Mat()
-    const numComponents = cv.connectedComponentsWithStats(main_part_thres, labels, stats, centroids)
+    const numComponents = cv.connectedComponents(main_part_thres, labels)
 
     console.log("got connected components")
     console.log("num components = " + numComponents)
 
-    // find largest connected component
-    const hist: { [key: number]: number } = {}
-    for (let i = 0; i < numComponents; i++) hist[i] = 0;
-    for (let ix in labels.data) hist[labels.data[ix]] += 1;
-
-    const sortedHist = Object.entries(hist).sort((x,y) => y[1] - x[1])
-    console.log(sortedHist)
+    const sortedHist = imageHist(labels, numComponents)
     const secondLargest: number = +sortedHist[1][0]
 
     const largestComponentImg = new cv.Mat()
@@ -237,8 +332,6 @@ function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Params):
     main_part.delete()
     main_part_thres.delete()
     labels.delete()
-    stats.delete()
-    centroids.delete()
     largestComponentImg.delete()
     secondLargestMat.delete()
     contours.delete()
@@ -269,17 +362,19 @@ function getColors(img: cv.Mat, K: number): cv.Mat {
     }
 
     // from R x C x 3 matrix to (R*C) x 3 x 1 matrix
-    console.log("about to reshape")
+    // console.log("about to reshape")
     const imgFloat = new cv.Mat()
     img.convertTo(imgFloat, cv.CV_32F)
-    debugMatrix(img)
-    debugMatrix(imgFloat)
+    // debugMatrix(img)
+    // debugMatrix(imgFloat)
     const pixels = cv.matFromArray(imgFloat.rows * imgFloat.cols,
                                    imgFloat.channels(), cv.CV_32F,
                                    Array.from(imgFloat.data32F))
-    debugMatrix(pixels)
-    console.log("done reshaping")
-    cv.kmeans(pixels, K, labels, criteria, 10, flags, centers)
+    // debugMatrix(pixels)
+    // console.log("done reshaping")
+    console.log("Running KMeans")
+    const iterations = 10
+    cv.kmeans(pixels, K, labels, criteria, iterations, flags, centers)
     console.log("Kmeans finished")
 
     const centers8U = cv.matFromArray(centers.rows, centers.cols, cv.CV_8U,
@@ -300,7 +395,7 @@ function debugMatrix(mat: cv.Mat) {
 // Returns a new image, same size as `img` (but with only one channel), where each
 // pixel contains the (index of the) color in `colors` that is closest.
 // TODO if this is too slow, rewrite it in rust :P
-function labelImageByColors(img: cv.Mat, colors: cv.Mat): cv.Mat {
+function labelImageByColors(img: cv.Mat, colors: cv.Mat): {labeledByColorIndex: cv.Mat, labeledRGB: cv.Mat} {
     let continuousImg
     if (img.isContinuous()) {
         continuousImg = img
@@ -309,11 +404,13 @@ function labelImageByColors(img: cv.Mat, colors: cv.Mat): cv.Mat {
         continuousImg = img.clone()
     }
 
-    const labeled = new cv.Mat(img.size(), cv.CV_8UC3)
-    const rows = labeled.rows
-    const cols = labeled.cols
+    const labeledRGB = new cv.Mat(img.size(), cv.CV_8UC3)
+    const labeledByColorIndex = new cv.Mat(img.size(), cv.CV_8U)
+    const rows = labeledRGB.rows
+    const cols = labeledRGB.cols
     const numColors = colors.rows
     const numChannels = colors.cols
+
     console.log(`Img: ${img.rows} ${img.cols} ${img.channels()}`)
     console.log(`Colors: ${colors.rows} ${colors.cols} ${colors.channels()}`)
     if (img.channels() != numChannels) {
@@ -325,15 +422,16 @@ function labelImageByColors(img: cv.Mat, colors: cv.Mat): cv.Mat {
     if (img.type() != cv.CV_8UC3) {
         throw new Error("img should be unsigned 8-bit 3-channel")
     }
-    if (colors.type() != cv.CV_8UC3) {
-        throw new Error("colors should be unsigned 8-bit 3-channel")
+    if (colors.type() != cv.CV_8U) {
+        throw new Error("colors should be unsigned 8-bit 1-channel")
     }
     console.log(colors.data)
 
     // Premature optimization
     const colorsData = colors.data
     const imageData = img.data
-    const labeledData = labeled.data
+    const labeledRGBData = labeledRGB.data
+    const labeledByColorIndexData = labeledByColorIndex.data
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -352,12 +450,13 @@ function labelImageByColors(img: cv.Mat, colors: cv.Mat): cv.Mat {
                     best = i
                 }
                 for (let channel = 0; channel < numChannels; channel++) {
-                    labeledData[(r * cols + c) * numChannels + channel] = colorsData[best * numChannels + channel]
+                    labeledRGBData[(r * cols + c) * numChannels + channel] = colorsData[best * numChannels + channel]
                 }
+                labeledByColorIndexData[r * cols + c] = best
             }
         }
     }
-    return labeled
+    return {labeledByColorIndex, labeledRGB}
 }
 
 function reshapeMat(mat: cv.Mat, rows: number, cols: number, newTpe: cv.MatType): cv.Mat {

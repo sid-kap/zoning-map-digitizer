@@ -16,6 +16,10 @@ declare module "opencv.js" {
     }
     export type ISize = Size | { width: number, height: number }
 
+    // export interface Mat {
+    //     ones(rows: number, cols: number, tpe: MatType): cv.Mat
+    // }
+
     export class Mat {
         constructor()
         constructor(size: ISize, tpe: MatType)
@@ -48,10 +52,14 @@ declare module "opencv.js" {
         isContinuous(): bool
 
         delete()
+
+        static ones(rows: number, cols: number, tpe: MatType): cv.Mat
     }
 
     export class MatVector {
         get(i: number): Mat
+
+        size(): number
 
         push_back(x: Mat): void
 
@@ -117,7 +125,7 @@ declare module "opencv.js" {
     export const CHAIN_APPROX_SIMPLE: ContourMethod
     export const CHAIN_APPROX_TC89_L1: ContourMethod
     export const CHAIN_APPROX_TC89_KCOS: ContourMethod
-    export function findContours(image: Mat, outputConturs: MatVector,
+    export function findContours(image: Mat, outputContours: MatVector,
                                  outputHierarchy: MatVector,
                                  mode: ContourMode, method: ContourMethod, offset?: Point)
     export function findContours(image: Mat, outputContours: MatVector,
@@ -425,9 +433,9 @@ declare module "opencv.js" {
     export function connectedComponentsWithStats(image: Mat, labels:Mat,
                                                  stats: Mat, centroids: Mat,
                                                  connectivity?: number,
-                                                 ltype?: CV_32S | CV_16U)
+                                                 ltype?: CV_32S | CV_16U): number
     export function connectedComponents(image: Mat, labels:Mat,
-                                        connectivity?: number, ltype?: CV_32S | CV_16U)
+                                        connectivity?: number, ltype?: CV_32S | CV_16U): number
 
     // type of data must be CV_32F, CV_32FC2, or CV_32FC2
     export function kmeans(data: Mat, K: number, bestLabels: Mat,
@@ -466,4 +474,8 @@ declare module "opencv.js" {
 
     //     is_regression(): bool
     // }
+
+    export function dilate(src: Mat, dst: Mat, kernel: Mat, anchor?: IPoint,
+                           iterations?: number, borderType?: BorderType,
+                           borderValue?: IScalar)
 }
