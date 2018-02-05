@@ -249,7 +249,9 @@ function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): cv.M
 function imageHist(img: cv.Mat, numValues: number): [number, number][] {
     const hist = new Array<number>()
     for (let i = 0; i < numValues; i++) hist[i] = 0;
-    for (let ix in img.data) hist[img.data[ix]] += 1;
+
+    const data = img.data
+    for (let ix in img.data) hist[data[ix]] += 1;
 
     const sortedHist = Object.entries(hist).sort((x,y) => y[1] - x[1])
 
