@@ -80,7 +80,7 @@ module.exports = {
 
     node: { fs: 'empty' },
 
-    devtool: "cheap-source-map"
+    // devtool: "cheap-source-map"
 
     // minify: {
     //     mangle: false,

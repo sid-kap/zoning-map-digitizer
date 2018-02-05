@@ -1,15 +1,10 @@
 {
   "compilerOptions": {
-      "sourceMap": true,
+      // "sourceMap": true,
       "lib": [ "ES6", "DOM", "es2017.object" ],
-      "jsx": "react",
-      "allowJs": true,
-      "noImplicitAny": true
+      // "jsx": "react",
+      // "allowJs": true,
+      "noImplicitAny": true,
   },
-  "typeRoots": ["./src/@types"]
-  // "files": [
-  //     "src/opencv.js.d.ts",
-  //     "src/Lib.ts",
-  //     "src/Main.tsx"
-  // ]
+  "typeRoots": ["./src/@types", "./node_modules/@types"]
 }
