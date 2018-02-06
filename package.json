@@ -23,5 +23,9 @@
     "build": "node --max_old_space_size=6000 node_modules/webpack/bin/webpack.js",
     "client": "node --max_old_space_size=6000 node_modules/webpack-dev-server/bin/webpack-dev-server.js --port 3000",
     "start": "nf start"
+  },
+  "devDependencies": {
+    "@types/webpack": "^3.8.5",
+    "ts-node": "^4.1.0"
   }
 }

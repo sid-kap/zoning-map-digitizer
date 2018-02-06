@@ -1,6 +1,7 @@
-var path = require("path");
+import * as path from "path"
+import * as webpack from "webpack"
 
-module.exports = {
+const config: webpack.Configuration = {
     entry: {
         app: [
             './src/index.js'
@@ -80,10 +81,12 @@ module.exports = {
 
     node: { fs: 'empty' },
 
-    // devtool: "cheap-source-map"
+    devtool: "cheap-source-map"
 
     // minify: {
     //     mangle: false,
     // },
 
 };
+
+export default config
