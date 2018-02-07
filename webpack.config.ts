@@ -6,7 +6,14 @@ const config: webpack.Configuration = {
         app: [
             './src/index.js'
         ],
+        vendor: ["opencv.js"]
     },
+
+    plugins: [
+        new webpack.optimize.CommonsChunkPlugin({
+            name: "vendor",
+        }),
+    ],
 
     output: {
         path: path.resolve(__dirname + '/dist'),
