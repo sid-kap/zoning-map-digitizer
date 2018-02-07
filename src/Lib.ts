@@ -162,7 +162,7 @@ function compute(img: cv.Mat, params: Params): cv.Mat {
     console.log(hist)
     const largestColor = hist[0][0]
 
-    const polygons = new Array<cv.Mat>()
+    const polygons = new cv.MatVector()
     const main = document.querySelector("div#main")
 
     for (let i = 0; i < numColors; i++) {
@@ -170,13 +170,17 @@ function compute(img: cv.Mat, params: Params): cv.Mat {
         if (i != largestColor) {
             console.log(`Computing polygons for color ${i}`)
             const polys = getColorPolygons(largeImageColor, i)
-            polygons.push(polys)
-
-            let canvas = document.createElement("canvas")
-            main.appendChild(canvas)
-            canvas.id = `color-${i}`
-            cv.imshow(`color-${i}`, polys)
+            for (let ix in polys) {
+                // TODO also save the color index with it!
+                polygons.push_back(polys[ix])
+            }
+            // polys.delete()
         }
+    }
+
+    console.log("about to draw")
+    for (let i = 0; i < polygons.size(); i++) {
+        cv.drawContours(largeImageQuantized, polygons, i, [255,255,255,0], 4)
     }
 
     scaledDown.delete()
@@ -187,7 +191,8 @@ function compute(img: cv.Mat, params: Params): cv.Mat {
     return largeImageQuantized
 }
 
-function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): cv.Mat {
+function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Array<cv.Mat>
+    {
     const mask = new cv.Mat()
     const colorIndexMat = cv.matFromArray(1,1, cv.CV_8U, [colorIndex])
     cv.compare(labeledByColorIndex, colorIndexMat, mask, cv.CMP_EQ)
@@ -206,42 +211,68 @@ function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): cv.M
     console.log("finished blurring and threshing")
 
     // cv.imshow("output", dilated)
-    cv.imshow("output", threshed)
+    // cv.imshow("output", threshed)
 
-    // const labels = new cv.Mat()
-    // const numComponents = cv.connectedComponents(dilated, labels)
-    // console.log(`numComponents = ${numComponents}`)
+    const componentsLabeled = new cv.Mat()
+    const numComponents = cv.connectedComponents(threshed, componentsLabeled)
+    console.log(`numComponents = ${numComponents}`)
 
     mask.delete()
     colorIndexMat.delete()
     blurred.delete()
 
-    return threshed
-    // firs
+    if (numComponents < 200) {
+        // otherwise its probably shit.
+        const hist = imageHist(componentsLabeled, numComponents)
 
-    // const contours = new cv.MatVector()
-    // cv.findContours(dilated, contours, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-    // console.log("found contours")
+        console.log(hist)
+        const contours = new Array<cv.Mat>()
 
-    // const simpleContours = new cv.MatVector()
-    // for (let i = 0; i < contours.size(); i++) {
-    //     const contour = contours.get(i)
-    //     const approxCurve = new cv.Mat()
-    //     cv.approxPolyDP(contour, approxCurve, 10, true)
-    //     simpleContours.push_back(approxCurve)
-    // }
-    // console.log("found approx polygons")
+        for (let ix in hist) {
+            const color = hist[ix][0]
+            const freq =  hist[ix][1]
+            if (color != 0 && freq > 50) {
+                console.log(`doing shit for color ${color}`)
+                const componentMask = new cv.Mat()
+                const colorIndexMat = cv.matFromArray(1,1, cv.CV_8U, [color])
+                cv.compare(labeledByColorIndex, colorIndexMat, componentMask, cv.CMP_EQ)
 
-    // const polygonsFound = new cv.Mat(labeledByColorIndex.size(), cv.CV_8UC3)
-    // for (let i = 0; i < simpleContours.size(); i++) {
-    //     cv.drawContours(polygonsFound, simpleContours, i, [255,0,0,0],
-    //                     4 // thickness
-    //                    )
-    // }
-    // console.log("drew polygons")
+                const edges = new cv.Mat()
+                cv.Canny(componentMask, edges, 100, 200)
 
-    // return polygonsFound
+                const contourVec = new cv.MatVector()
+                const hierarchy = new cv.Mat()
+                // cv.findContours(componentMask, contours, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+                cv.findContours(edges, contourVec, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+                console.log(`contourVec.size() is ${contourVec.size()}`)
 
+                if (contourVec.size() > 0) {
+                    // TODO need to find out why this varies from 0 to 10,000...
+                    // shouldn't it always be 1??? I might just say screw it and
+                    // rewrite findContours in Rust or something, it's so fricking slow too
+                    const approxCurve = new cv.Mat()
+                    cv.approxPolyDP(contourVec.get(0), approxCurve, 10, true)
+
+                    contours.push(approxCurve)
+                }
+
+                edges.delete()
+                componentMask.delete()
+                colorIndexMat.delete()
+                contourVec.delete()
+            }
+        }
+
+        console.log("done with all contours")
+
+        return contours
+        // let canvas = document.createElement("canvas")
+        // main.appendChild(canvas)
+        // canvas.id = `color-${i}`
+        // cv.imshow(`color-${i}`, threshed)
+    }
+
+    return []
 }
 
 // computes histogram of an image, assuming image type is integral (not floating)

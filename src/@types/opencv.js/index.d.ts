@@ -478,4 +478,7 @@ declare module "opencv.js" {
     export function dilate(src: Mat, dst: Mat, kernel: Mat, anchor?: IPoint,
                            iterations?: number, borderType?: BorderType,
                            borderValue?: IScalar)
+
+    export function Canny(img: Mat, edges: Mat, threshold1: number, threshold1: number,
+                          apertureSize?: number, l2gradient?: bool)
 }
