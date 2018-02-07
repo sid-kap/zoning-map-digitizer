@@ -9,7 +9,7 @@
 require('./index.html');
 
 var Lib = require('./Lib.ts');
-Lib.main();
+Lib.trueMain();
 // var Main = require('./Main.tsx');
 
 // var React = require('react');

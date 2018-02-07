@@ -14,18 +14,20 @@
     "style-loader": "^0.20.1",
     "ts-loader": "^3.4.0",
     "typescript": "^2.7.1",
-    "url-loader": "^0.6.2",
-    "webpack": "^3.10.0",
-    "webpack-dev-server": "^2.11.1"
+    "url-loader": "^0.6.2"
   },
   "scripts": {
     "api": "node api.js",
-    "build": "node --max_old_space_size=6000 node_modules/webpack/bin/webpack.js",
-    "client": "node --max_old_space_size=6000 node_modules/webpack-dev-server/bin/webpack-dev-server.js --port 3000",
+    "build": "node --max_old_space_size=6000 node_modules/webpack/bin/webpack.js --progress",
+    "client": "node --max_old_space_size=6000 node_modules/webpack-dev-server/bin/webpack-dev-server.js --port 3000 --progress",
     "start": "nf start"
   },
   "devDependencies": {
     "@types/webpack": "^3.8.5",
-    "ts-node": "^4.1.0"
+    "rust-native-wasm-loader": "^0.2.7",
+    "ts-node": "^4.1.0",
+    "wasm-loader": "^1.1.0",
+    "webpack": "^3.10.0",
+    "webpack-dev-server": "^2.11.1"
   }
 }

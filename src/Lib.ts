@@ -3,6 +3,20 @@ import * as cv from "opencv.js"
 import { PDFJSStatic } from "pdfjs-dist"
 let PDFJS: PDFJSStatic = require("pdfjs-dist")
 
+const loadRust = require("./lib.rs")
+// import { loadAdd } from './lib'
+
+let add: (a: number, b: number) => number
+
+export async function trueMain() {
+    loadRust().then((result: any) => {
+        add = result.instance.exports['add']
+        console.log("rust loaded!")
+        console.log("the answer is", add(2,3))
+        main()
+    })
+}
+
 export function main() {
     // Make all the HTML elements here because (1) I'm a savage and (2) this is strongly typed, yo.
     const main = document.querySelector("div#main")

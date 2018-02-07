@@ -1,0 +1,9 @@
+[package]
+name = "zoning-map-digitizer"
+version = "0.1.0"
+authors = ["Sidharth Kapur <sidharthkapur1@gmail.com>"]
+
+[dependencies]
+
+[lib]
+crate-type = ["cdylib"]

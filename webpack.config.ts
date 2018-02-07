@@ -47,6 +47,20 @@ const config: webpack.Configuration = {
                 loader: 'file-loader',
             },
             {
+                test: /\.rs$/,
+                use: [
+                    {
+                        loader: 'wasm-loader'
+                    },
+                    {
+                        loader: 'rust-native-wasm-loader',
+                        options: {
+                            release: true
+                        }
+                    }
+                ]
+            },
+            {
                 test: require.resolve('opencv.js'),
                 use: [{
                     loader: 'expose-loader',
@@ -59,14 +73,7 @@ const config: webpack.Configuration = {
                     loader: 'expose-loader',
                     options: 'PDFJS',
                 }],
-            },
-            // {
-            //     test: require.resolve('./src/Lib.ts'),
-            //     use: [{
-            //         loader: 'expose-loader',
-            //         options: 'Lib',
-            //     }],
-            // },
+            }
         ],
 
         noParse: /\.elm$/,
