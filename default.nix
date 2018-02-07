@@ -10,8 +10,8 @@ let
 
   rustPackages = pkgs.callPackage rustNightlyNixRepo { };
 
-  cargoNightly = rustPackages.cargo {};
-  rustcNightly = rustPackages.rustc {};
+  cargoNightly = rustPackages.cargo { date = "2018-02-07"; };
+  rustcNightly = rustPackages.rustc { date = "2018-02-07"; };
 
   rustNightly = rustPackages.rustcWithSysroots {
     rustc = rustcNightly;
