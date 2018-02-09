@@ -13,6 +13,7 @@ export async function trueMain() {
         add = result.instance.exports['add']
         console.log("rust loaded!")
         console.log("the answer is", add(2,3))
+
         main()
     })
 }
@@ -107,6 +108,9 @@ function getHighSaturationRegion(img: cv.Mat): cv.Mat {
     let layers = new cv.MatVector()
     cv.split(hsv, layers)
     let saturation = layers.get(1)
+
+    hsv.delete()
+    layers.delete()
     return saturation
 }
 
@@ -243,37 +247,30 @@ function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Arra
         const contours = new Array<cv.Mat>()
 
         for (let ix in hist) {
-            const color = hist[ix][0]
-            const freq =  hist[ix][1]
-            if (color != 0 && freq > 50) {
-                console.log(`doing shit for color ${color}`)
-                const componentMask = new cv.Mat()
-                const colorIndexMat = cv.matFromArray(1,1, cv.CV_8U, [color])
-                cv.compare(labeledByColorIndex, colorIndexMat, componentMask, cv.CMP_EQ)
+            const component = hist[ix][0]
+            const freq = hist[ix][1]
+            if (component != 0 && freq > 50) {
+                console.log(`doing shit for component ${component}`)
 
-                const edges = new cv.Mat()
-                cv.Canny(componentMask, edges, 100, 200)
+                const contour = getBlobContour(componentsLabeled, component)
 
-                const contourVec = new cv.MatVector()
-                const hierarchy = new cv.Mat()
-                // cv.findContours(componentMask, contours, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-                cv.findContours(edges, contourVec, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-                console.log(`contourVec.size() is ${contourVec.size()}`)
+                console.log("contour for component", component, "length", contour.length)
+                console.log(contour)
 
-                if (contourVec.size() > 0) {
-                    // TODO need to find out why this varies from 0 to 10,000...
-                    // shouldn't it always be 1??? I might just say screw it and
-                    // rewrite findContours in Rust or something, it's so fricking slow too
-                    const approxCurve = new cv.Mat()
-                    cv.approxPolyDP(contourVec.get(0), approxCurve, 10, true)
+                // if (contourVec.size() > 0) {
+                //     // TODO need to find out why this varies from 0 to 10,000...
+                //     // shouldn't it always be 1??? I might just say screw it and
+                //     // rewrite findContours in Rust or something, it's so fricking slow too
+                //     const approxCurve = new cv.Mat()
+                //     cv.approxPolyDP(contourVec.get(0), approxCurve, 10, true)
 
-                    contours.push(approxCurve)
-                }
+                //     contours.push(approxCurve)
+                // }
 
-                edges.delete()
-                componentMask.delete()
-                colorIndexMat.delete()
-                contourVec.delete()
+                // edges.delete()
+                // componentMask.delete()
+                // colorIndexMat.delete()
+                // contourVec.delete()
             }
         }
 
@@ -289,14 +286,119 @@ function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Arra
     return []
 }
 
+// only works with 32S (C1) arrays
+// Code basically copied from https://chaosinmotion.blog/2014/08/21/finding-the-boundary-of-a-one-bit-per-pixel-monochrome-blob/
+function getBlobContour(blobs: cv.Mat, blobIndex: number) {
+
+    const data = blobs.data32S
+
+    const numRows = blobs.rows
+    const numCols = blobs.cols
+
+    function isPixel(r: number, c: number): boolean {
+        return data[r * numCols + c] == blobIndex
+    }
+
+    function getStartingPoint(): {row: number, col: number} | null {
+        for (let r = 0; r < numRows; r++) {
+            for (let c = 0; c < numCols; c++) {
+                if (isPixel(r,c)) {
+                    return {row: r, col: c}
+                }
+            }
+        }
+        return null
+    }
+
+    function getPixelState(r: number, c: number): number {
+        let ret = 0
+
+        // (x-1, y-1)
+        if (isPixel(r-1, c-1)) ret |= 1
+        // (x, y-1)
+        if (isPixel(r-1, c)) ret |= 2
+        // (x-1, y)
+        if (isPixel(r,c-1)) ret |= 4
+        // (x,y)
+        if (isPixel(r,c)) ret |= 8
+        return ret
+    }
+
+    type Direction = "up" | "down" | "left" | "right"
+
+    function nextMove(state: number, dir: Direction): Direction | "illegal" {
+        if (state == 1) return "left"
+        if (state == 2) return "up"
+        if (state == 3) return "left"
+        if (state == 4) return "down"
+        if (state == 5) return "down"
+        if (state == 6 && dir == "right") return "down"
+        if (state == 6 && dir == "left") return "up"
+        if (state == 7) return "down"
+        if (state == 8) return "right"
+        if (state == 9 && dir == "down") return "left"
+        if (state == 9 && dir == "up") return "right"
+        if (state == 10) return "up"
+        if (state == 11) return "left"
+        if (state == 12) return "right"
+        if (state == 13) return "right"
+        if (state == 14) return "up"
+
+        console.error(`illegal move, state=${state}, dir=${dir}`)
+        return 'illegal'
+    }
+
+    const startingPoint = getStartingPoint()
+    if (startingPoint == null) {
+        throw new Error(`${blobIndex} not found in array.`)
+    }
+
+    const points = [startingPoint]
+    let r = startingPoint.row
+    let c = startingPoint.col
+    let dir: Direction = 'up'
+    do {
+        const state = getPixelState(r,c)
+        const move = nextMove(state, dir)
+        if (move == "illegal") throw new Error("Illegal move!")
+        if (move == "up") r -= 1
+        if (move == "down") r += 1
+        if (move == "left") c -= 1
+        if (move == "right") c += 1
+        dir = move
+
+        points.push({row: r, col: c})
+
+    } while (r != startingPoint.row || c != startingPoint.col)
+
+    return points
+}
+
 // computes histogram of an image, assuming image type is integral (not floating)
 // and the values in the image are integers in [0, numValues)
+// assumes 1 channel
 function imageHist(img: cv.Mat, numValues: number): [number, number][] {
+    if (img.channels() != 1) throw new Error(`Channels should equal 1. Found: ${img.channels()}`)
+
     const hist = new Array<number>()
     for (let i = 0; i < numValues; i++) hist[i] = 0;
 
-    const data = img.data
-    for (let ix in img.data) hist[data[ix]] += 1;
+    let data
+    if (img.type() == cv.CV_8U) {
+        data = img.data
+    } else if (img.type() == cv.CV_32S) {
+        data = img.data32S
+    } else {
+        throw new Error(`Image type is ${img.type()}, only 8U and 32U supported`)
+    }
+
+    const numRows = img.rows
+    const numCols = img.cols
+    for (let r = 0; r < numRows; r++) {
+        for (let c = 0; c < numCols; c++) {
+            hist[data[r * numCols + c]] += 1
+        }
+    }
 
     const sortedHist = Object.entries(hist).sort((x,y) => y[1] - x[1])
 
@@ -420,7 +522,9 @@ function getColors(img: cv.Mat, K: number): cv.Mat {
     // debugMatrix(pixels)
     // console.log("done reshaping")
     console.log("Running KMeans")
-    const iterations = 10
+    // const iterations = 10
+
+    const iterations = 1 // temporarily, since I'm running this a lot
     cv.kmeans(pixels, K, labels, criteria, iterations, flags, centers)
     console.log("Kmeans finished")
 
