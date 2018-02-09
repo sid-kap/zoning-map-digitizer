@@ -197,9 +197,8 @@ function compute(img: cv.Mat, params: Params): cv.Mat {
     }
 
     console.log("about to draw")
-    for (let i = 0; i < polygons.size(); i++) {
-        cv.drawContours(largeImageQuantized, polygons, i, [255,255,255,0], 4)
-    }
+    // negative number means draw all contours
+    cv.drawContours(largeImageQuantized, polygons, -1, [0,0,255,0], 4)
 
     scaledDown.delete()
     maskedImage.delete()
@@ -222,14 +221,7 @@ function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Arra
     const threshed = new cv.Mat()
     cv.threshold(blurred, threshed, 20, 255, cv.THRESH_BINARY)
 
-    // const dilated = new cv.Mat()
-    // const kernel = cv.Mat.ones(10, 10, cv.CV_8U)
-    // cv.dilate(mask, dilated, kernel)
-    // console.log("finished dilating")
     console.log("finished blurring and threshing")
-
-    // cv.imshow("output", dilated)
-    // cv.imshow("output", threshed)
 
     const componentsLabeled = new cv.Mat()
     const numComponents = cv.connectedComponents(threshed, componentsLabeled)
@@ -257,15 +249,15 @@ function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Arra
                 console.log("contour for component", component, "length", contour.length)
                 console.log(contour)
 
-                // if (contourVec.size() > 0) {
-                //     // TODO need to find out why this varies from 0 to 10,000...
-                //     // shouldn't it always be 1??? I might just say screw it and
-                //     // rewrite findContours in Rust or something, it's so fricking slow too
-                //     const approxCurve = new cv.Mat()
-                //     cv.approxPolyDP(contourVec.get(0), approxCurve, 10, true)
+                // **Very important**: OpenCV represents contour points in (x,y) format,
+                // which is flipped from (row,col) order.
+                // See https://stackoverflow.com/questions/25642532/opencv-pointx-y-represent-column-row-or-row-column
+                const contoursFlattened = ([] as number[]).concat(...(contour.map(x => [x.col, x.row])))
+                const contourMat = cv.matFromArray(contour.length, 2, cv.CV_32S, contoursFlattened)
+                const approxCurve = new cv.Mat()
+                cv.approxPolyDP(contourMat, approxCurve, 10, true)
 
-                //     contours.push(approxCurve)
-                // }
+                contours.push(approxCurve)
 
                 // edges.delete()
                 // componentMask.delete()
@@ -281,9 +273,10 @@ function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Arra
         // main.appendChild(canvas)
         // canvas.id = `color-${i}`
         // cv.imshow(`color-${i}`, threshed)
+    } else {
+        return []
     }
 
-    return []
 }
 
 // only works with 32S (C1) arrays
