@@ -16,8 +16,7 @@ let
   rustNightly = rustPackages.rustcWithSysroots {
     rustc = rustcNightly;
     sysroots = [
-      (rustPackages.rust-std { })
-      (rustPackages.rust-std { system = "wasm32-unknown-unknown"; })
+      (rustPackages.rust-std { system = "wasm32-unknown-unknown"; date = "2018-02-07"; })
     ];
   };
 in
