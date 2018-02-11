@@ -1,18 +1,24 @@
 import * as path from "path"
 import * as webpack from "webpack"
+const CopyWebpackPlugin = require("copy-webpack-plugin")
 
 const config: webpack.Configuration = {
     entry: {
         app: [
-            './src/index.js'
+            './src/index.ts'
         ],
-        vendor: ["opencv.js"]
+        vendor: ["opencv.js"],
+        // "pdf.worker": 'pdfjs-dist/build/pdf.worker.js'
     },
 
     plugins: [
         new webpack.optimize.CommonsChunkPlugin({
             name: "vendor",
         }),
+        new CopyWebpackPlugin([{
+            from: 'node_modules/pdfjs-dist/build/pdf.worker.js',
+            to: 'pdf.worker.js'
+        }])
     ],
 
     output: {
@@ -25,6 +31,7 @@ const config: webpack.Configuration = {
         rules: [
             {
                 test: /\.(css|scss)$/,
+                exclude: /node_modules/,
                 use: [
                     'style-loader',
                     'css-loader',
@@ -35,26 +42,24 @@ const config: webpack.Configuration = {
                 exclude: /node_modules/,
                 loader:  'file-loader?name=[name].[ext]',
             },
-            // {
-            //     test:    /\.elm$/,
-            //     exclude: [/elm-stuff/, /node_modules/],
-            //     loader:  'elm-webpack-loader?verbose=true&warn=true',
-            // },
             {
                 test:    /\.tsx?$/,
-                exclude: [/elm-stuff/, /node_modules/],
+                exclude: /node_modules/,
                 loader:  'ts-loader',
             },
             {
                 test: /\.woff(2)?(\?v=[0-9]\.[0-9]\.[0-9])?$/,
+                exclude: /node_modules/,
                 loader: 'url-loader?limit=10000&mimetype=application/font-woff',
             },
             {
                 test: /\.(ttf|eot|svg)(\?v=[0-9]\.[0-9]\.[0-9])?$/,
+                exclude: /node_modules/,
                 loader: 'file-loader',
             },
             {
                 test: /\.rs$/,
+                exclude: /node_modules/,
                 use: [
                     {
                         loader: 'wasm-loader'
@@ -66,6 +71,11 @@ const config: webpack.Configuration = {
                         }
                     }
                 ]
+            },
+            {
+                test: /\.worker\.js$/,
+                exclude: /node_modules/,
+                use: { loader: 'worker-loader' }
             },
             {
                 test: require.resolve('opencv.js'),
@@ -90,7 +100,7 @@ const config: webpack.Configuration = {
         inline: true,
         stats: { colors: true },
 
-        contentBase: path.join(__dirname, "dist"),
+        // contentBase: path.join(__dirname, "dist"),
     },
 
     node: { fs: 'empty' },

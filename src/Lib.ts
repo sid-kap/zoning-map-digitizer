@@ -1,80 +1,34 @@
 import * as cv from "opencv.js"
 
 import { PDFJSStatic } from "pdfjs-dist"
-let PDFJS: PDFJSStatic = require("pdfjs-dist")
+const PDFJS: PDFJSStatic = require("pdfjs-dist/webpack")
+PDFJS.workerSrc = "/pdf.worker.js"
 
-const loadRust = require("./lib.rs")
-// import { loadAdd } from './lib'
+// const loadRust = require("./lib.rs")
 
-let add: (a: number, b: number) => number
+// let add: (a: number, b: number) => number
 
-export async function trueMain() {
-    loadRust().then((result: any) => {
-        add = result.instance.exports['add']
-        console.log("rust loaded!")
-        console.log("the answer is", add(2,3))
+// export async function loadAndUseRust() {
+//     loadRust().then((result: any) => {
+//         add = result.instance.exports['add']
+//         console.log("rust loaded!")
+//         console.log("the answer is", add(2,3))
+//     })
+// }
 
-        main()
-    })
+export type SerializedMat = {
+    rows: number,
+    cols: number,
+    type: cv.MatType,
+    data: ArrayBuffer
 }
 
-export function main() {
-    // Make all the HTML elements here because (1) I'm a savage and (2) this is strongly typed, yo.
-    const main = document.querySelector("div#main")
-
-    const fileInput = document.createElement("input")
-    fileInput.type = "file"
-    fileInput.multiple = false
-    fileInput.name = "file"
-    fileInput.onchange = fileChanged
-    const fileLabel = document.createElement("label")
-    fileLabel.innerHTML = "Upload PDF file"
-    fileLabel.appendChild(fileInput)
-
-    function makeNumberInput(name: string, labelText: string, defaultValue: number) {
-        const input = document.createElement("input")
-        input.type = "number"
-        input.name = name
-        input.value = defaultValue.toString()
-        input.onchange = () => console.log("changed")
-
-        const label = document.createElement("label")
-        label.innerText = labelText
-        label.appendChild(input)
-        return label
-    }
-    const maxComputeDimension = makeNumberInput("maxComputeDimension", "Max image dimension",
-                                                defaultParams.maxComputeDimension)
-    const saturationThreshold = makeNumberInput("saturationThreshold", "Saturation threshold",
-                                                defaultParams.saturationThreshold)
-    const distanceToHighSaturation = makeNumberInput("distanceToHighSaturation", "Distance to high saturation",
-                                                     defaultParams.distanceToHighSaturation)
-    const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy",
-                                         defaultParams.polyAccuracy)
-
-    const hiddenCanvas = document.createElement("canvas")
-    hiddenCanvas.style.display = "none"
-    hiddenCanvas.id = "pdfConversion"
-
-    const outputCanvas = document.createElement("canvas")
-    outputCanvas.id = "output"
-
-    main.appendChild(fileLabel)
-    main.appendChild(document.createElement("br"))
-    main.appendChild(maxComputeDimension)
-    main.appendChild(document.createElement("br"))
-    main.appendChild(distanceToHighSaturation)
-    main.appendChild(document.createElement("br"))
-    main.appendChild(polyAccuracy)
-    main.appendChild(document.createElement("br"))
-    main.appendChild(hiddenCanvas)
-    main.appendChild(outputCanvas)
-}
-
-async function pdfToImgArray(buffer: ArrayBuffer): Promise<cv.Mat> {
+export async function pdfToImgArray(buffer: ArrayBuffer): Promise<cv.Mat> {
     // let response = await fetch(pdfUrl)
     // let pdfArray = await response.arrayBuffer()
+    console.log("in pdfToImgArray")
     let pdf = await PDFJS.getDocument(new Uint8Array(buffer))
+    console.log("got document")
     let page = await pdf.getPage(1)
     let viewport = page.getViewport(1)
     // let viewport = page.getViewport(0.3)
@@ -121,94 +75,14 @@ export type Params = {
     polyAccuracy: number,
 }
 
-const defaultParams: Params = {
+export const defaultParams: Params = {
     maxComputeDimension: 1000,
     saturationThreshold: 20,
     distanceToHighSaturation: 5,
     polyAccuracy: 10,
 }
 
-let paramsValue: Params = defaultParams
-
-async function fileChanged(e: Event) {
-    let input = <any> document.querySelector("input[name=file]")
-    let fileList: FileList = input.files
-    let file: File = fileList[0]
-    let fileReader = new FileReader()
-    let buffer: ArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        fileReader.onload = () => resolve(fileReader.result)
-        fileReader.onerror = err => reject(err)
-
-        fileReader.readAsArrayBuffer(file)
-    })
-    let mat = await pdfToImgArray(buffer)
-    let mat3 = new cv.Mat()
-    // drop the alpha
-    cv.cvtColor(mat, mat3, cv.COLOR_RGBA2RGB)
-    mat.delete()
-    let result = compute(mat3, paramsValue)
-
-    let outputCanvas = <HTMLCanvasElement> document.querySelector("canvas#output")
-    outputCanvas.style.display = "none"
-    cv.imshow("output", result)
-    let output = outputCanvas.toDataURL()
-
-    let resultLink = document.createElement("a")
-    resultLink.href = output
-    resultLink.innerHTML = "Download result"
-    document.querySelector("div#main").appendChild(resultLink)
-}
-
-function compute(img: cv.Mat, params: Params): cv.Mat {
-    const ratio = Math.max(img.rows / params.maxComputeDimension, img.cols / params.maxComputeDimension)
-
-    const scaledDown = new cv.Mat()
-    cv.resize(img, scaledDown, {width: img.cols / ratio, height: img.rows / ratio})
-
-    // The original image and the scaled-down image with irrelevant parts blacked/zeroed out.
-    const {maskedImage, smallerMaskedImage} = largestSaturatedPart(img, scaledDown, params)
-
-    // Do k-means to get the colors from the scaledDown image.
-    // (We use the smaller image because it's faster.)
-    const numColors = 25
-    const centers = getColors(smallerMaskedImage, numColors)
-
-    const {labeledByColorIndex: largeImageColor, labeledRGB: largeImageQuantized} = labelImageByColors(maskedImage, centers)
-
-    console.log("Histogram of colors in image:")
-    const hist = imageHist(largeImageColor, numColors)
-    console.log(hist)
-    const largestColor = hist[0][0]
-
-    const polygons = new cv.MatVector()
-    const main = document.querySelector("div#main")
-
-    for (let i = 0; i < numColors; i++) {
-        // Skip the background color
-        if (i != largestColor) {
-            console.log(`Computing polygons for color ${i}`)
-            const polys = getColorPolygons(largeImageColor, i)
-            for (let ix in polys) {
-                // TODO also save the color index with it!
-                polygons.push_back(polys[ix])
-            }
-            // polys.delete()
-        }
-    }
-
-    console.log("about to draw")
-    // negative number means draw all contours
-    cv.drawContours(largeImageQuantized, polygons, -1, [0,0,255,0], 4)
-
-    scaledDown.delete()
-    maskedImage.delete()
-    smallerMaskedImage.delete()
-    centers.delete()
-
-    return largeImageQuantized
-}
-
-function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Array<cv.Mat>
+export function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Array<cv.Mat>
     {
     const mask = new cv.Mat()
     const colorIndexMat = cv.matFromArray(1,1, cv.CV_8U, [colorIndex])
@@ -255,7 +129,7 @@ function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Arra
                 const contoursFlattened = ([] as number[]).concat(...(contour.map(x => [x.col, x.row])))
                 const contourMat = cv.matFromArray(contour.length, 2, cv.CV_32S, contoursFlattened)
                 const approxCurve = new cv.Mat()
-                cv.approxPolyDP(contourMat, approxCurve, 10, true)
+                cv.approxPolyDP(contourMat, approxCurve, 5, true)
 
                 contours.push(approxCurve)
 
@@ -370,7 +244,7 @@ function getBlobContour(blobs: cv.Mat, blobIndex: number) {
 // computes histogram of an image, assuming image type is integral (not floating)
 // and the values in the image are integers in [0, numValues)
 // assumes 1 channel
-function imageHist(img: cv.Mat, numValues: number): [number, number][] {
+export function imageHist(img: cv.Mat, numValues: number): [number, number][] {
     if (img.channels() != 1) throw new Error(`Channels should equal 1. Found: ${img.channels()}`)
 
     const hist = new Array<number>()
@@ -404,7 +278,7 @@ function imageHist(img: cv.Mat, numValues: number): [number, number][] {
     return retArray
 }
 
-function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Params):
+export function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Params):
     {maskedImage: cv.Mat, smallerMaskedImage: cv.Mat} {
 
     const hsv = new cv.Mat()
@@ -487,7 +361,7 @@ function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Params):
     return {maskedImage, smallerMaskedImage}
 }
 
-function getColors(img: cv.Mat, K: number): cv.Mat {
+export function getColors(img: cv.Mat, K: number): cv.Mat {
     const labels = new cv.Mat()
     const centers = new cv.Mat()
     // const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 100, 0.1)
@@ -539,7 +413,7 @@ function debugMatrix(mat: cv.Mat) {
 // Returns a new image, same size as `img` (but with only one channel), where each
 // pixel contains the (index of the) color in `colors` that is closest.
 // TODO if this is too slow, rewrite it in rust :P
-function labelImageByColors(img: cv.Mat, colors: cv.Mat): {labeledByColorIndex: cv.Mat, labeledRGB: cv.Mat} {
+export function labelImageByColors(img: cv.Mat, colors: cv.Mat): {labeledByColorIndex: cv.Mat, labeledRGB: cv.Mat} {
     let continuousImg
     if (img.isContinuous()) {
         continuousImg = img

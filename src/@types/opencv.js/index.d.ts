@@ -67,7 +67,7 @@ declare module "opencv.js" {
     }
 
     export function matFromArray(rows: number, cols: MatType, tpe: MatType,
-                                 array: Array<number>)
+                                 array: Array<number> | ArrayBuffer)
 
     export function matFromImageData(imageData: ImageData)
 
