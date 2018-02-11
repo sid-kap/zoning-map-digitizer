@@ -3,10 +3,13 @@ require('./index.html');
 
 import * as Lib from "./Lib.ts"
 import * as cv from "opencv.js"
+import * as L from "leaflet"
+const GeoSearch = require("leaflet-geosearch")
 
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
 
 main()
+makeMap()
 
 let paramsValue: Lib.Params = Lib.defaultParams
 
@@ -154,4 +157,29 @@ function compute(img: cv.Mat, params: Lib.Params): cv.Mat {
     centers.delete()
 
     return largeImageQuantized
+}
+
+function makeMap() {
+    console.log("making map")
+    const main = document.querySelector("div#main")
+    const mapEl = document.createElement("div")
+    mapEl.id = "map"
+    mapEl.style.height = "400px"
+    main.appendChild(mapEl)
+
+    const provider = new GeoSearch.OpenStreetMapProvider()
+
+    const searchControl = new GeoSearch.GeoSearchControl({
+        provider: provider,
+    })
+
+    const map = new L.Map('map').setView([37.773972, -122.431297], 13);
+    L.tileLayer(
+        "https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}", {
+        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+        maxZoom: 18,
+        id: "mapbox.streets",
+        accessToken: "pk.eyJ1Ijoic2lkLWthcCIsImEiOiJjamRpNzU2ZTMxNWE0MzJtZjAxbnphMW5mIn0.b6m4jgFhPOPOYOoaNGmogQ",
+    }).addTo(map);
+    map.addControl(searchControl)
 }
