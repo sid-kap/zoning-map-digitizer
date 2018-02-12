@@ -23,7 +23,7 @@ export type SerializedMat = {
     data: ArrayBuffer
 }
 
-export async function pdfToImgArray(buffer: ArrayBuffer): Promise<cv.Mat> {
+export async function pdfToImgArray(buffer: ArrayBuffer): Promise<{ mat: cv.Mat, imageUrl: string}> {
     // let response = await fetch(pdfUrl)
     // let pdfArray = await response.arrayBuffer()
     console.log("in pdfToImgArray")
@@ -47,13 +47,15 @@ export async function pdfToImgArray(buffer: ArrayBuffer): Promise<cv.Mat> {
 
     let imageData = context.getImageData(0, 0, canvas.width, canvas.height)
 
+    let imageUrl = canvas.toDataURL()
+
     let mat = cv.matFromImageData(imageData)
     canvas.style.display = "none"
     console.log("made mat!")
     // console.log(mat.size())
     // console.log(mat.depth())
     // console.log(mat.channels())
-    return mat
+    return {mat, imageUrl}
 }
 
 function getHighSaturationRegion(img: cv.Mat): cv.Mat {
