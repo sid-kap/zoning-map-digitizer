@@ -216,9 +216,9 @@ function compute(img: cv.Mat, params: Lib.Params): cv.Mat {
             // worker.postMessage({serializedImg, colorIndex: i})
 
             const polys = Lib.getColorPolygons(largeImageColor, i)
-            for (let ix in polys) {
+            for (let poly of polys) {
                 // TODO also save the color index with it!
-                polygons.push_back(polys[ix])
+                polygons.push_back(poly)
             }
         }
     }

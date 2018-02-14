@@ -114,9 +114,9 @@ export function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number
         console.log(hist)
         const contours = new Array<cv.Mat>()
 
-        for (let ix in hist) {
-            const component = hist[ix][0]
-            const freq = hist[ix][1]
+        for (let pair of hist) {
+            const component = pair[0]
+            const freq = pair[1]
             if (component != 0 && freq > 50) {
                 console.log(`doing shit for component ${component}`)
 
