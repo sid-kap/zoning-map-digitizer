@@ -4,6 +4,9 @@ import { PDFJSStatic } from "pdfjs-dist"
 const PDFJS: PDFJSStatic = require("pdfjs-dist/webpack")
 PDFJS.workerSrc = "/pdf.worker.js"
 
+import * as L from "leaflet"
+const smr = <any> require("smr")
+
 // const loadRust = require("./lib.rs")
 
 // let add: (a: number, b: number) => number
@@ -488,3 +491,15 @@ function reshapeMat(mat: cv.Mat, rows: number, cols: number, newTpe: cv.MatType)
 
 // To clear canvas:
 // context.clearRect(0, 0, canvas.width, canvas.height);
+
+// imgPoints are not _really_ latitude/longitudes, but they're represented using the LatLng
+// data type because they were picked using Leaflet as well.
+export function regressLatLong(pairs: Array<[L.LatLng, L.LatLng]>) {
+    let regression = new smr.Regression({ numX: 3, numY: 2 })
+    for (let pair of pairs) {
+        regression.push({x: [pair[0].lat, pair[0].lng, 1],
+                         y: [pair[1].lat, pair[1].lng]})
+    }
+
+    return regression.calculateCoefficients()
+}

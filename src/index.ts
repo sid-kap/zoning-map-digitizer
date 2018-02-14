@@ -151,6 +151,7 @@ async function fileChanged(e: Event) {
                 // TODO Make the marker show the marker index
                 const marker = L.marker(imgMap.getCenter(), { draggable: true }).addTo(imgMap)
                 mapState.konvaMarkers.set(i, marker)
+                marker.on("moveend", recomputeCorrespondence)
             }
         }
         fabricDiv.appendChild(link)
@@ -264,9 +265,9 @@ function makeMap() {
     fabricDivAny.style["grid-row"] = "1"
     fabricDivAny.style["grid-column"] = "1"
 
-    const fabricCanvas = document.createElement("canvas")
-    fabricCanvas.id = "fabric-canvas"
-    fabricDiv.appendChild(fabricCanvas)
+    // const fabricCanvas = document.createElement("canvas")
+    // fabricCanvas.id = "fabric-canvas"
+    // fabricDiv.appendChild(fabricCanvas)
 
     const leafletDiv = document.createElement("div")
     leafletDiv.id = "leaflet-container"
@@ -315,9 +316,25 @@ function makeMap() {
                 // TODO Make the marker show the marker index
                 const marker = L.marker(map.getCenter(), { draggable: true }).addTo(map)
                 mapState.leafletMarkers.set(i, marker)
+                marker.on("moveend", recomputeCorrespondence)
             }
         }
         leafletDiv.appendChild(link)
         leafletDiv.appendChild(document.createElement("br"))
+    }
+}
+
+function recomputeCorrespondence() {
+    const pairs = new Array<[L.LatLng, L.LatLng]>()
+    for (let entry of mapState.konvaMarkers) {
+        if (mapState.leafletMarkers.has(entry[0])) {
+            pairs.push([entry[1].getLatLng(),
+                        mapState.leafletMarkers.get(entry[0]).getLatLng()])
+        }
+    }
+    if (pairs.length > 1) {
+        console.log(Lib.regressLatLong(pairs))
+    } else {
+        console.log("Tried to recompute but not enough points")
     }
 }

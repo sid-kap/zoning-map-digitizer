@@ -6,7 +6,8 @@
       // "allowJs": true,
       "noImplicitAny": true,
       "allowSyntheticDefaultImports": true,
-      "module": "commonjs"
+      "module": "commonjs",
+      "target": "ES6"
   },
   "typeRoots": ["./src/@types", "./node_modules/@types"]
 }
