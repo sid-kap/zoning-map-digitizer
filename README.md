@@ -11,3 +11,4 @@
 
 ## TODO:
 - [ ] make the algorithm parameters configurable (I made some `<input>` fields, but they don't do anything)
+- [ ] make the blob boundary functions take account of holes inside the polygon
