@@ -1,0 +1,19 @@
+body p {
+    font-size: 1.3em;
+}
+
+body label {
+    font-size: 1.3em;
+}
+
+div .step {
+    border: 2px solid #888888;
+    padding: 15px;
+    border-radius: 3px;
+    background-color: #eaebed;
+    margin: 20px;
+}
+
+div .step-disabled {
+    opacity: 0.5;
+}

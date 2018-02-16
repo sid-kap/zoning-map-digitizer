@@ -6,6 +6,8 @@ import * as cv from "opencv.js"
 import * as L from "leaflet"
 const GeoSearch = require("leaflet-geosearch")
 
+import "./index.css"
+
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
 
 main()
@@ -13,9 +15,9 @@ makeMap()
 
 let paramsValue: Lib.Params = Lib.defaultParams
 
-function main() {
-    // Make all the HTML elements here because (1) I'm a savage and (2) this is strongly typed, yo.
-    const main = document.querySelector("div#main")
+function uploadStepHtml() {
+    const h2 = document.createElement("h2")
+    h2.innerHTML = "Step 1: Upload PDF file"
 
     const fileInput = document.createElement("input")
     fileInput.type = "file"
@@ -26,44 +28,123 @@ function main() {
     fileLabel.innerHTML = "Upload PDF file"
     fileLabel.appendChild(fileInput)
 
-    function makeNumberInput(name: string, labelText: string, defaultValue: number) {
-        const input = document.createElement("input")
-        input.type = "number"
-        input.name = name
-        input.value = defaultValue.toString()
-        input.onchange = () => console.log("changed")
+    const description = document.createElement("p")
+    description.innerHTML = "..."
 
-        const label = document.createElement("label")
-        label.innerText = labelText
-        label.appendChild(input)
-        return label
+    const wrapper = document.createElement("div")
+    wrapper.classList.add("step")
+    wrapper.appendChild(h2)
+    wrapper.appendChild(fileInput)
+    wrapper.appendChild(fileLabel)
+    wrapper.appendChild(description)
+
+    return wrapper
+}
+
+function setPropAny<T>(x: T, key: string, val: string) {
+    const xAny = <any> x
+    xAny[key] = val
+}
+
+function segmentationHtml() {
+    const h2 = document.createElement("h2")
+    h2.innerHTML = "Step 2: Segmentation"
+    setPropAny(h2.style, "grid-row", "1")
+    setPropAny(h2.style, "grid-column", "1 / 3")
+
+    const wrapper = document.createElement("div")
+    wrapper.style.display = "grid"
+    setPropAny(wrapper.style, "grid-template-columns", "repeat(2, 1fr)")
+    setPropAny(wrapper.style, "grid-gap", "10px")
+
+    const preview = <HTMLCanvasElement> document.createElement("canvas")
+    preview.id = "segmentation-preview"
+    preview.width = 500
+    preview.height = 500
+    preview.style.width = "500px"
+    preview.style.height = "500px"
+    preview.style.backgroundColor = "#555555"
+    const previewAny = <any> preview.style
+    setPropAny(preview.style, "grid-row", "2")
+    setPropAny(preview.style, "grid-column", "2 / 3")
+
+    const maxComputeDimension =
+        makeNumberInput("maxComputeDimension", "Max image dimension",
+                        Lib.defaultParams.maxComputeDimension, true)
+    const saturationThreshold =
+        makeNumberInput("saturationThreshold", "Saturation threshold",
+                        Lib.defaultParams.saturationThreshold, true)
+    const distanceToHighSaturation =
+        makeNumberInput("distanceToHighSaturation",
+                        "Distance to high saturation",
+                        Lib.defaultParams.distanceToHighSaturation, true)
+    const controls = document.createElement("div")
+    setPropAny(controls.style, "grid-row", "2")
+    setPropAny(controls.style, "grid-column", "1 / 2")
+    for (const x of [maxComputeDimension, saturationThreshold, distanceToHighSaturation]) {
+        controls.appendChild(x)
+        controls.appendChild(document.createElement("br"))
     }
-    const maxComputeDimension = makeNumberInput("maxComputeDimension", "Max image dimension",
-                                                Lib.defaultParams.maxComputeDimension)
-    const saturationThreshold = makeNumberInput("saturationThreshold", "Saturation threshold",
-                                                Lib.defaultParams.saturationThreshold)
-    const distanceToHighSaturation = makeNumberInput("distanceToHighSaturation", "Distance to high saturation",
-                                                     Lib.defaultParams.distanceToHighSaturation)
+
+    wrapper.classList.add("step")
+    wrapper.classList.add("step-disabled")
+    wrapper.appendChild(h2)
+    wrapper.appendChild(controls)
+    wrapper.appendChild(preview)
+
+    return wrapper
+}
+
+function makeNumberInput(name: string, labelText: string, defaultValue: number,
+                         disabled: boolean) {
+    const input = document.createElement("input")
+    input.type = "number"
+    input.name = name
+    input.value = defaultValue.toString()
+    input.onchange = () => console.log("changed")
+    input.disabled = disabled
+
+    const label = document.createElement("label")
+    label.innerText = labelText
+    label.appendChild(input)
+    return label
+}
+
+function main() {
+    // Make all the HTML elements here because (1) I'm a savage and (2) this is strongly typed, yo.
+    const body = document.querySelector("body")
+    body.style.backgroundColor = "#fbf7ea"
+    body.style.color = "#444444"
+
+    const main = <HTMLElement> document.querySelector("div#main")
+    main.style.maxWidth = "70em"
+    main.style.marginLeft = "auto"
+    main.style.marginRight = "auto"
+    main.style.marginTop = "5em"
+    main.style.marginBottom = "5em"
+    main.style.lineHeight = "1.1em"
+
+    const h1 = document.createElement("h1")
+    h1.style.textAlign = "center"
+    h1.innerHTML = "Zoning Map Digitizer"
+    main.appendChild(h1)
+
+    const uploadStep = uploadStepHtml()
+    main.appendChild(uploadStep)
+
+    const seg = segmentationHtml()
+    main.appendChild(seg)
+
     const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy",
-                                         Lib.defaultParams.polyAccuracy)
+                                         Lib.defaultParams.polyAccuracy, true)
 
     const hiddenCanvas = document.createElement("canvas")
     hiddenCanvas.style.display = "none"
     hiddenCanvas.id = "pdfConversion"
+    main.appendChild(hiddenCanvas)
 
-    const outputCanvas = document.createElement("canvas")
-    outputCanvas.id = "output"
-
-    main.appendChild(fileLabel)
-    main.appendChild(document.createElement("br"))
-    main.appendChild(maxComputeDimension)
-    main.appendChild(document.createElement("br"))
-    main.appendChild(distanceToHighSaturation)
-    main.appendChild(document.createElement("br"))
     main.appendChild(polyAccuracy)
     main.appendChild(document.createElement("br"))
-    main.appendChild(hiddenCanvas)
-    main.appendChild(outputCanvas)
 }
 
 async function fileChanged(e: Event) {
