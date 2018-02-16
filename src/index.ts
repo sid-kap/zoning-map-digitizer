@@ -8,8 +8,11 @@ const GeoSearch = require("leaflet-geosearch")
 
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
 
-main()
-makeMap()
+import * as UI from "./ui.tsx"
+
+// main()
+UI.main()
+// makeMap()
 
 let paramsValue: Lib.Params = Lib.defaultParams
 

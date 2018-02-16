@@ -31,7 +31,7 @@ const config: webpack.Configuration = {
         rules: [
             {
                 test: /\.(css|scss)$/,
-                exclude: /node_modules/,
+                // exclude: /node_modules/,
                 use: [
                     'style-loader',
                     'css-loader',
@@ -49,7 +49,7 @@ const config: webpack.Configuration = {
             },
             {
                 test: /\.woff(2)?(\?v=[0-9]\.[0-9]\.[0-9])?$/,
-                exclude: /node_modules/,
+                // exclude: /node_modules/,
                 loader: 'url-loader?limit=10000&mimetype=application/font-woff',
             },
             {

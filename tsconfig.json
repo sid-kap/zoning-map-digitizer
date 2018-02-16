@@ -2,7 +2,7 @@
   "compilerOptions": {
       "sourceMap": true,
       "lib": [ "ES6", "DOM", "es2017.object" ],
-      // "jsx": "react",
+      "jsx": "react",
       // "allowJs": true,
       "noImplicitAny": true,
       "allowSyntheticDefaultImports": true,
