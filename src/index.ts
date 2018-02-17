@@ -1,5 +1,5 @@
-// Require index.html so it gets copied to dist
-require('./index.html');
+// Require index.pug so it gets copied to dist
+import "./index.pug"
 
 import * as Lib from "./Lib.ts"
 import * as cv from "opencv.js"

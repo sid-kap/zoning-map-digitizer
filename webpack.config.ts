@@ -43,6 +43,10 @@ const config: webpack.Configuration = {
                 loader:  'file-loader?name=[name].[ext]',
             },
             {
+                test: /\.pug/,
+                loaders: ['pug-loader'],
+            },
+            {
                 test:    /\.tsx?$/,
                 exclude: /node_modules/,
                 loader:  'ts-loader',
