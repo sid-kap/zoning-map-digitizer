@@ -30,12 +30,22 @@ const config: webpack.Configuration = {
     module: {
         rules: [
             {
-                test: /\.(css|scss)$/,
+                test: /\.css$/,
                 exclude: /node_modules/,
                 use: [
                     'style-loader',
                     'css-loader',
                 ]
+            },
+            {
+                test: /\.scss$/,
+                use: [{
+                    loader: "style-loader"
+                }, {
+                    loader: "css-loader"
+                }, {
+                    loader: "sass-loader"
+                }]
             },
             {
                 test:    /\.html$/,
@@ -44,7 +54,8 @@ const config: webpack.Configuration = {
             },
             {
                 test: /\.pug/,
-                loaders: ['pug-loader'],
+                loaders: ['file-loader?name=[name].html',
+                          'pug-html-loader?pretty&exports=false']
             },
             {
                 test:    /\.tsx?$/,

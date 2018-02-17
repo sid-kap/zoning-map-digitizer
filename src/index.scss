@@ -1,0 +1,69 @@
+p {
+    font-size: 1.3em;
+}
+
+label {
+    font-size: 1.3em;
+}
+
+div .step {
+    border: 2px solid #888888;
+    padding: 15px;
+    border-radius: 3px;
+    background-color: #eaebed;
+    margin: 20px;
+
+    margin-left: auto;
+    margin-right: auto;
+
+    h2 {
+        grid-row: 1 / 2;
+    }
+}
+
+div .step-disabled {
+    opacity: 0.3;
+}
+
+/* from https://www.w3schools.com/howto/howto_css_loader.asp */
+.loader {
+    border: 16px solid #f3f3f3; /* Light grey */
+    border-top: 16px solid #3498db; /* Blue */
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+div#main {
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 5em;
+    margin-bottom: 5em;
+    line-height: 1.1em;
+
+    h1 {
+        text-align: center;
+    }
+
+    div#step3 {
+        max-width: 100em;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        grid-gap: 10px;
+
+        div#leaflet-img-container {
+            grid-row: 2;
+            grid-column: 1 / 2;
+        }
+        div#leaflet-map-container {
+            grid-row: 2;
+            grid-column: 2 / 3;
+        }
+    }
+}

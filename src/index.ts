@@ -1,12 +1,11 @@
-// Require index.pug so it gets copied to dist
+// Require index.html so it gets copied to dist
 import "./index.pug"
+import "./index.scss"
 
 import * as Lib from "./Lib.ts"
 import * as cv from "opencv.js"
 import * as L from "leaflet"
 const GeoSearch = require("leaflet-geosearch")
-
-import "./index.css"
 
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
 
@@ -204,6 +203,7 @@ async function fileChanged(e: Event) {
     })
     console.log("got buffer")
     let {mat, imageUrl} = await Lib.pdfToImgArray(buffer)
+    appState.originalImg = mat
     console.log("got mat")
     loader.style.display = "none"
 
@@ -253,9 +253,6 @@ async function fileChanged(e: Event) {
         zoom: 1,
     })
 
-    // const southWest = imgMap.unproject([0, 3 * height],   imgMap.getMaxZoom()-1)
-    // const northEast = imgMap.unproject([3 * divWidth, 0], imgMap.getMaxZoom()-1)
-    // console.log(southWest, northEast)
     const bounds = L.latLngBounds(L.latLng(0, 0), L.latLng(mat.rows, mat.cols))
     const imgOverlay = L.imageOverlay(imageUrl, bounds).addTo(imgMap)
 
@@ -364,6 +361,7 @@ function compute(img: cv.Mat, params: Lib.Params): cv.Mat {
 }
 
 let appState = {
+    originalImg: <cv.Mat> null,
     leafletMarkers: new Map<number, L.Marker>(),
     konvaMarkers:   new Map<number, L.Marker>()
 }
