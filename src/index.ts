@@ -100,8 +100,10 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
     setPropAny(wrapper.style, "grid-template-columns", "repeat(2, 1fr)")
     setPropAny(wrapper.style, "grid-gap", "10px")
 
-    const preview = makeCanvas("segmentation-preview")
+    const preview = <HTMLImageElement> document.createElement("img") // makeCanvas("segmentation-preview")
     setGridLoc(preview, "2", "2 / 3")
+    preview.style.maxWidth = "100%"
+    preview.style.maxHeight = "100%"
 
     const maxComputeDimension =
         makeNumberInput("maxComputeDimension", "Max image dimension",
@@ -113,12 +115,30 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
         makeNumberInput("distanceToHighSaturation",
                         "Distance to high saturation",
                         Lib.defaultParams.distanceToHighSaturation, true)
+
+    const button = document.createElement("button")
+    button.type = "button"
+    button.innerHTML = "Segment image"
+
+    // since the whole panel is disabled right now
+    button.disabled = true
+
+    button.onclick = () => {
+        button.disabled = true
+        segmentationStep(+maxComputeDimension.input.value, +saturationThreshold.input.value,
+                         +distanceToHighSaturation.input.value)
+        button.disabled = false
+        const imageUrl = Lib.matToDataURL(appState.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
+        preview.src = imageUrl
+    }
+
     const controls = document.createElement("div")
     setGridLoc(controls, "2", "1 / 2")
     for (const x of [maxComputeDimension, saturationThreshold, distanceToHighSaturation]) {
-        controls.appendChild(x)
+        controls.appendChild(x.label)
         controls.appendChild(document.createElement("br"))
     }
+    controls.appendChild(button)
 
     wrapper.classList.add("step-disabled")
     wrapper.appendChild(h2)
@@ -127,7 +147,7 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
 }
 
 function makeNumberInput(name: string, labelText: string, defaultValue: number,
-                         disabled: boolean) {
+                         disabled: boolean): {label: HTMLLabelElement, input: HTMLInputElement} {
     const input = document.createElement("input")
     input.type = "number"
     input.name = name
@@ -138,7 +158,7 @@ function makeNumberInput(name: string, labelText: string, defaultValue: number,
     const label = document.createElement("label")
     label.innerText = labelText
     label.appendChild(input)
-    return label
+    return {label, input}
 }
 
 function main() {
@@ -164,7 +184,7 @@ function main() {
     const step4 = <HTMLElement> document.querySelector("div#step4")
 
     step4.style.maxWidth = "70em"
-    step4.appendChild(polyAccuracy)
+    step4.appendChild(polyAccuracy.label)
     step4.appendChild(document.createElement("br"))
 
     makeMap(document.querySelector("div#step3"))
@@ -196,6 +216,38 @@ async function fileChanged(e: Event) {
     let img = <HTMLImageElement> document.querySelector("img#original-preview")
     img.src = imageUrl
 
+    setupCorrespondenceImgMap(imageUrl, mat)
+
+    // Unblock step 2
+    document.querySelector("div#step2").classList.remove("step-disabled")
+    for (const input of Array.from(document.querySelectorAll("div#step2 input"))) {
+        const inp = <HTMLInputElement> input
+        inp.disabled = false
+    }
+    let button = <HTMLButtonElement> document.querySelector("div#step2 button")
+    button.disabled = false
+
+
+
+    // let mat3 = new cv.Mat()
+    // // drop the alpha
+    // cv.cvtColor(mat, mat3, cv.COLOR_RGBA2RGB)
+    // mat.delete()
+    // let result = compute(mat3, paramsValue)
+
+    // let outputCanvas = <HTMLCanvasElement> document.querySelector("canvas#output")
+    // outputCanvas.style.display = "none"
+    // cv.imshow("output", result)
+    // let output = outputCanvas.toDataURL()
+
+    // let resultLink = document.createElement("a")
+    // resultLink.href = output
+    // resultLink.innerHTML = "Download result"
+    // document.querySelector("div#main").appendChild(resultLink)
+}
+
+// TODO should be able to pass a cv.Shape type here instead of the actual mat
+function setupCorrespondenceImgMap(imageUrl: string, mat: cv.Mat) {
     const fabricDiv = document.querySelector("div#leaflet-img-container")
 
     const imgMapEl = document.createElement("div")
@@ -245,39 +297,34 @@ async function fileChanged(e: Event) {
         fabricDiv.appendChild(link)
         fabricDiv.appendChild(document.createElement("br"))
     }
-
-    // let mat3 = new cv.Mat()
-    // // drop the alpha
-    // cv.cvtColor(mat, mat3, cv.COLOR_RGBA2RGB)
-    // mat.delete()
-    // let result = compute(mat3, paramsValue)
-
-    // let outputCanvas = <HTMLCanvasElement> document.querySelector("canvas#output")
-    // outputCanvas.style.display = "none"
-    // cv.imshow("output", result)
-    // let output = outputCanvas.toDataURL()
-
-    // let resultLink = document.createElement("a")
-    // resultLink.href = output
-    // resultLink.innerHTML = "Download result"
-    // document.querySelector("div#main").appendChild(resultLink)
 }
 
-function compute(img: cv.Mat, params: Lib.Params): cv.Mat {
-    const ratio = Math.max(img.rows / params.maxComputeDimension, img.cols / params.maxComputeDimension)
+function segmentationStep(maxComputeDimension: number, saturationThreshold: number,
+                          distanceToHighSaturation: number) {
+    const img = appState.originalImg
+
+    const ratio = Math.max(img.rows / maxComputeDimension, img.cols / maxComputeDimension)
 
     const scaledDown = new cv.Mat()
     cv.resize(img, scaledDown, {width: img.cols / ratio, height: img.rows / ratio})
 
     // The original image and the scaled-down image with irrelevant parts blacked/zeroed out.
-    const {maskedImage, smallerMaskedImage} = Lib.largestSaturatedPart(img, scaledDown, params)
+    const {maskedImage, smallerMaskedImage} = Lib.largestSaturatedPart(img, scaledDown, saturationThreshold, distanceToHighSaturation)
+    console.log("Done finding saturated part!")
 
+    appState.scaledDown = scaledDown
+
+    appState.maskedImage = maskedImage
+    appState.smallerMaskedImage = smallerMaskedImage
+}
+
+function compute(): cv.Mat {
     // Do k-means to get the colors from the scaledDown image.
     // (We use the smaller image because it's faster.)
     const numColors = 25
-    const centers = Lib.getColors(smallerMaskedImage, numColors)
+    const centers = Lib.getColors(appState.smallerMaskedImage, numColors)
 
-    const {labeledByColorIndex: largeImageColor, labeledRGB: largeImageQuantized} = Lib.labelImageByColors(maskedImage, centers)
+    const {labeledByColorIndex: largeImageColor, labeledRGB: largeImageQuantized} = Lib.labelImageByColors(appState.maskedImage, centers)
 
     console.log("Histogram of colors in image:")
     const hist = Lib.imageHist(largeImageColor, numColors)
@@ -287,12 +334,12 @@ function compute(img: cv.Mat, params: Lib.Params): cv.Mat {
     const polygons = new cv.MatVector()
     const main = document.querySelector("div#main")
 
-    const serializedImg: Lib.SerializedMat = {
-        rows: largeImageColor.rows,
-        cols: largeImageColor.cols,
-        type: largeImageColor.type(),
-        data: largeImageColor.data.buffer
-    }
+    // const serializedImg: Lib.SerializedMat = {
+    //     rows: largeImageColor.rows,
+    //     cols: largeImageColor.cols,
+    //     type: largeImageColor.type(),
+    //     data: largeImageColor.data.buffer
+    // }
 
     for (let i = 0; i < numColors; i++) {
         // Skip the background color
@@ -316,9 +363,11 @@ function compute(img: cv.Mat, params: Lib.Params): cv.Mat {
     // negative number means draw all contours
     cv.drawContours(largeImageQuantized, polygons, -1, [0,0,255,0], 4)
 
-    scaledDown.delete()
-    maskedImage.delete()
-    smallerMaskedImage.delete()
+    // TODO delete these? or leave them in case we want to re-run this step with
+    // different params?
+    // scaledDown.delete()
+    // maskedImage.delete()
+    // smallerMaskedImage.delete()
     centers.delete()
 
     return largeImageQuantized
@@ -326,6 +375,9 @@ function compute(img: cv.Mat, params: Lib.Params): cv.Mat {
 
 let appState = {
     originalImg: <cv.Mat> null,
+    scaledDown: <cv.Mat> null,
+    maskedImage: <cv.Mat> null,
+    smallerMaskedImage: <cv.Mat> null,
     leafletMarkers: new Map<number, L.Marker>(),
     konvaMarkers:   new Map<number, L.Marker>()
 }

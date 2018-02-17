@@ -26,6 +26,7 @@ export type SerializedMat = {
     data: ArrayBuffer
 }
 
+// TODO should take a canvas to work in as an argument
 export async function pdfToImgArray(buffer: ArrayBuffer): Promise<{ mat: cv.Mat, imageUrl: string}> {
     // let response = await fetch(pdfUrl)
     // let pdfArray = await response.arrayBuffer()
@@ -59,6 +60,14 @@ export async function pdfToImgArray(buffer: ArrayBuffer): Promise<{ mat: cv.Mat,
     // console.log(mat.depth())
     // console.log(mat.channels())
     return {mat, imageUrl}
+}
+
+export function matToDataURL(mat: cv.Mat, canvas: HTMLCanvasElement): string {
+    cv.imshow(canvas.id, mat)
+    const imageURL = canvas.toDataURL()
+    let context = canvas.getContext("2d")
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    return imageURL
 }
 
 function getHighSaturationRegion(img: cv.Mat): cv.Mat {
@@ -283,7 +292,9 @@ export function imageHist(img: cv.Mat, numValues: number): [number, number][] {
     return retArray
 }
 
-export function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Params):
+export function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat,
+                                     saturationThreshold: number,
+                                     distanceToHighSaturation: number):
     {maskedImage: cv.Mat, smallerMaskedImage: cv.Mat} {
 
     const hsv = new cv.Mat()
@@ -292,12 +303,12 @@ export function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat, params: Pa
     cv.split(hsv, layers)
     const saturation = layers.get(1)
     const threshed = new cv.Mat()
-    cv.threshold(saturation, threshed, params.saturationThreshold, 255, cv.THRESH_BINARY)
+    cv.threshold(saturation, threshed, saturationThreshold, 255, cv.THRESH_BINARY)
     // cv.imshow("output", threshed)
 
     const main_part = new cv.Mat()
     cv.blur(threshed, main_part,
-            {width: params.distanceToHighSaturation, height: params.distanceToHighSaturation})
+            {width: distanceToHighSaturation, height: distanceToHighSaturation})
     const main_part_thres = new cv.Mat()
     cv.threshold(main_part, main_part_thres, 20, 255, cv.THRESH_BINARY)
     // cv.imshow("output", main_part_thres)
