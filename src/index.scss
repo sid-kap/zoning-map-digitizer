@@ -6,21 +6,6 @@ label {
     font-size: 1.3em;
 }
 
-div .step {
-    border: 2px solid #888888;
-    padding: 15px;
-    border-radius: 3px;
-    background-color: #eaebed;
-    margin: 20px;
-
-    margin-left: auto;
-    margin-right: auto;
-
-    h2 {
-        grid-row: 1 / 2;
-    }
-}
-
 div .step-disabled {
     opacity: 0.3;
 }
@@ -50,6 +35,23 @@ div#main {
     h1 {
         text-align: center;
     }
+
+    div.step {
+        border: 2px solid #888888;
+        padding: 15px;
+        border-radius: 3px;
+        background-color: #eaebed;
+        margin: 20px;
+
+        margin-left: auto;
+        margin-right: auto;
+
+        h2 {
+            grid-row: 1;
+            grid-column: 1 / 3;
+        }
+    }
+
 
     div#step3 {
         max-width: 100em;

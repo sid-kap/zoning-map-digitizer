@@ -16,10 +16,6 @@ let paramsValue: Lib.Params = Lib.defaultParams
 function makeUploadStep(wrapper: HTMLDivElement) {
     wrapper.style.maxWidth = "70em"
 
-    const h2 = document.createElement("h2")
-    h2.innerHTML = "Step 1: Upload PDF file"
-    setGridLoc(h2, "1", "1 / 3")
-
     const fileInput = document.createElement("input")
     fileInput.type = "file"
     fileInput.multiple = false
@@ -39,7 +35,6 @@ function makeUploadStep(wrapper: HTMLDivElement) {
     setPropAny(wrapper.style, "grid-auto-rows", "minmax(10px, auto)")
     setPropAny(wrapper.style, "grid-gap", "10px")
 
-    wrapper.appendChild(h2)
     wrapper.appendChild(fileLabel)
     wrapper.appendChild(description)
 
@@ -92,10 +87,6 @@ function setGridLoc(el: HTMLElement, gridRow: string, gridColumn: string) {
 function makeSegmentationStep(wrapper: HTMLDivElement) {
     wrapper.style.maxWidth = "70em"
 
-    const h2 = document.createElement("h2")
-    h2.innerHTML = "Step 2: Segmentation"
-    setGridLoc(h2, "1", "1 / 3")
-
     wrapper.style.display = "grid"
     setPropAny(wrapper.style, "grid-template-columns", "repeat(2, 1fr)")
     setPropAny(wrapper.style, "grid-gap", "10px")
@@ -141,7 +132,6 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
     controls.appendChild(button)
 
     wrapper.classList.add("step-disabled")
-    wrapper.appendChild(h2)
     wrapper.appendChild(controls)
     wrapper.appendChild(preview)
 }
