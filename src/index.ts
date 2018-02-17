@@ -10,11 +10,12 @@ const GeoSearch = require("leaflet-geosearch")
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
 
 main()
-makeMap()
 
 let paramsValue: Lib.Params = Lib.defaultParams
 
-function uploadStepHtml() {
+function makeUploadStep(wrapper: HTMLDivElement) {
+    wrapper.style.maxWidth = "70em"
+
     const h2 = document.createElement("h2")
     h2.innerHTML = "Step 1: Upload PDF file"
     setGridLoc(h2, "1", "1 / 3")
@@ -33,13 +34,11 @@ function uploadStepHtml() {
     description.innerHTML = "..."
     setGridLoc(description, "3", "1 / 2")
 
-    const wrapper = document.createElement("div")
     wrapper.style.display = "grid"
     setPropAny(wrapper.style, "grid-template-columns", "repeat(2, 1fr)")
     setPropAny(wrapper.style, "grid-auto-rows", "minmax(10px, auto)")
     setPropAny(wrapper.style, "grid-gap", "10px")
 
-    wrapper.classList.add("step")
     wrapper.appendChild(h2)
     wrapper.appendChild(fileLabel)
     wrapper.appendChild(description)
@@ -58,7 +57,6 @@ function uploadStepHtml() {
     const loader = document.createElement("div")
     loader.classList.add("loader")
     loader.id = "original-preview-loader"
-    // loader.style.position = "absolute"
     loader.style.zIndex = "10"
     loader.style.margin = "auto"
     loader.style.display = "none"
@@ -67,8 +65,6 @@ function uploadStepHtml() {
     previewDiv.appendChild(loader)
 
     wrapper.appendChild(previewDiv)
-
-    return wrapper
 }
 
 function setPropAny<T>(x: T, key: string, val: string) {
@@ -93,12 +89,13 @@ function setGridLoc(el: HTMLElement, gridRow: string, gridColumn: string) {
     setPropAny(el.style, "grid-column", gridColumn)
 }
 
-function segmentationHtml() {
+function makeSegmentationStep(wrapper: HTMLDivElement) {
+    wrapper.style.maxWidth = "70em"
+
     const h2 = document.createElement("h2")
     h2.innerHTML = "Step 2: Segmentation"
     setGridLoc(h2, "1", "1 / 3")
 
-    const wrapper = document.createElement("div")
     wrapper.style.display = "grid"
     setPropAny(wrapper.style, "grid-template-columns", "repeat(2, 1fr)")
     setPropAny(wrapper.style, "grid-gap", "10px")
@@ -123,13 +120,10 @@ function segmentationHtml() {
         controls.appendChild(document.createElement("br"))
     }
 
-    wrapper.classList.add("step")
     wrapper.classList.add("step-disabled")
     wrapper.appendChild(h2)
     wrapper.appendChild(controls)
     wrapper.appendChild(preview)
-
-    return wrapper
 }
 
 function makeNumberInput(name: string, labelText: string, defaultValue: number,
@@ -154,23 +148,10 @@ function main() {
     body.style.color = "#444444"
 
     const main = <HTMLElement> document.querySelector("div#main")
-    main.style.maxWidth = "70em"
-    main.style.marginLeft = "auto"
-    main.style.marginRight = "auto"
-    main.style.marginTop = "5em"
-    main.style.marginBottom = "5em"
-    main.style.lineHeight = "1.1em"
 
-    const h1 = document.createElement("h1")
-    h1.style.textAlign = "center"
-    h1.innerHTML = "Zoning Map Digitizer"
-    main.appendChild(h1)
+    makeUploadStep(document.querySelector("div#step1"))
 
-    const uploadStep = uploadStepHtml()
-    main.appendChild(uploadStep)
-
-    const seg = segmentationHtml()
-    main.appendChild(seg)
+    makeSegmentationStep(document.querySelector("div#step2"))
 
     const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy",
                                          Lib.defaultParams.polyAccuracy, true)
@@ -180,8 +161,13 @@ function main() {
     hiddenCanvas.id = "pdfConversion"
     main.appendChild(hiddenCanvas)
 
-    main.appendChild(polyAccuracy)
-    main.appendChild(document.createElement("br"))
+    const step4 = <HTMLElement> document.querySelector("div#step4")
+
+    step4.style.maxWidth = "70em"
+    step4.appendChild(polyAccuracy)
+    step4.appendChild(document.createElement("br"))
+
+    makeMap(document.querySelector("div#step3"))
 }
 
 async function fileChanged(e: Event) {
@@ -210,29 +196,7 @@ async function fileChanged(e: Event) {
     let img = <HTMLImageElement> document.querySelector("img#original-preview")
     img.src = imageUrl
 
-    const fabricDiv = document.querySelector("div#fabric-container")
-    // const divWidth = (<any> fabricDiv).offsetWidth
-    // const fabricCanvas = <HTMLCanvasElement> document.querySelector("canvas#fabric-canvas")
-    // const height = mat.rows * (divWidth / mat.cols)
-    // const fabricCanvasAny = <any> fabricCanvas
-    // fabricCanvasAny.width = 3 * divWidth
-    // fabricCanvasAny.height = 3 * height
-    // const shrunk = new cv.Mat()
-    // cv.resize(mat, shrunk, {width: 3 * divWidth, height: 3 * height})
-
-    // const ctx = fabricCanvas.getContext("2d")
-    // const imageData = new ImageData(new Uint8ClampedArray(shrunk.data), shrunk.cols, shrunk.rows)
-    // ctx.putImageData(imageData,0,0)
-    // fabricCanvasAny.style.width = divWidth + "px"
-    // fabricCanvasAny.style.height = height + "px"
-
-    // const imageUrl = fabricCanvas.toDataURL()
-    // ctx.clearRect(0,0, fabricCanvas.width, fabricCanvas.height)
-
-    // This feels hacky
-    // fabricCanvas.parentNode.removeChild(fabricCanvas)
-    // fabricCanvas.style.width = "0px"
-    // fabricCanvas.style.height = "0px"
+    const fabricDiv = document.querySelector("div#leaflet-img-container")
 
     const imgMapEl = document.createElement("div")
     imgMapEl.id = "img-map"
@@ -366,50 +330,17 @@ let appState = {
     konvaMarkers:   new Map<number, L.Marker>()
 }
 
-function makeMap() {
-    console.log("making map")
-    const main = document.querySelector("div#main")
-    const mapDiv = document.createElement("div")
-    mapDiv.id = "map-container"
-    mapDiv.style.display = "grid"
-
-    // hack because the type declaration doesn't know about grid-*
-    const mapDivAny = <any> mapDiv
-    mapDivAny.style["grid-template-columns"] = "repeat(2, 1fr)"
-    mapDivAny.style["grid-gap"] = "10px"
-    // grid-template-columns: repeat(3, 1fr);
-    // grid-gap: 10px;
-    // grid-auto-rows: minmax(100px, auto);
-
-    main.appendChild(mapDiv)
-
-    const fabricDiv = document.createElement("div")
-    fabricDiv.id = "fabric-container"
-    mapDiv.appendChild(fabricDiv)
-    const fabricDivAny = <any> fabricDiv
-    fabricDivAny.style["grid-row"] = "1"
-    fabricDivAny.style["grid-column"] = "1"
-
-    // const fabricCanvas = document.createElement("canvas")
-    // fabricCanvas.id = "fabric-canvas"
-    // fabricDiv.appendChild(fabricCanvas)
-
-    const leafletDiv = document.createElement("div")
-    leafletDiv.id = "leaflet-container"
-    mapDiv.appendChild(leafletDiv)
-    const leafletDivAny = <any> mapDiv
-    leafletDivAny.style["grid-row"] = "1;"
-    leafletDivAny.style["grid-column"] = "2;"
+function makeMap(wrapper: HTMLDivElement) {
+    wrapper.classList.add("step-disabled")
+    const leafletDiv = <HTMLElement> document.querySelector("div#leaflet-map-container")
 
     const mapEl = document.createElement("div")
     mapEl.id = "map"
     mapEl.style.height = "400px"
     leafletDiv.appendChild(mapEl)
 
-    const provider = new GeoSearch.OpenStreetMapProvider()
-
     const searchControl = new GeoSearch.GeoSearchControl({
-        provider: provider,
+        provider: new GeoSearch.OpenStreetMapProvider(),
     })
 
     const map = new L.Map('map').setView([37.773972, -122.431297], 13)
