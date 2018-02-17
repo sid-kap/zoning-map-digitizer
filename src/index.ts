@@ -18,6 +18,7 @@ let paramsValue: Lib.Params = Lib.defaultParams
 function uploadStepHtml() {
     const h2 = document.createElement("h2")
     h2.innerHTML = "Step 1: Upload PDF file"
+    setGridLoc(h2, "1", "1 / 3")
 
     const fileInput = document.createElement("input")
     fileInput.type = "file"
@@ -27,16 +28,46 @@ function uploadStepHtml() {
     const fileLabel = document.createElement("label")
     fileLabel.innerHTML = "Upload PDF file"
     fileLabel.appendChild(fileInput)
+    setGridLoc(fileLabel, "2", "1 / 2")
 
     const description = document.createElement("p")
     description.innerHTML = "..."
+    setGridLoc(description, "3", "1 / 2")
 
     const wrapper = document.createElement("div")
+    wrapper.style.display = "grid"
+    setPropAny(wrapper.style, "grid-template-columns", "repeat(2, 1fr)")
+    setPropAny(wrapper.style, "grid-auto-rows", "minmax(10px, auto)")
+    setPropAny(wrapper.style, "grid-gap", "10px")
+
     wrapper.classList.add("step")
     wrapper.appendChild(h2)
-    wrapper.appendChild(fileInput)
     wrapper.appendChild(fileLabel)
     wrapper.appendChild(description)
+
+    const previewDiv = document.createElement("div")
+    previewDiv.style.width = "500px"
+    previewDiv.style.height = "500px"
+    previewDiv.style.backgroundColor = "#555555"
+    setGridLoc(previewDiv, "2 / 3", "2 / 3")
+
+    const preview = document.createElement("img")
+    preview.id = "original-preview"
+    preview.style.maxHeight = "100%"
+    preview.style.maxWidth = "100%"
+
+    const loader = document.createElement("div")
+    loader.classList.add("loader")
+    loader.id = "original-preview-loader"
+    // loader.style.position = "absolute"
+    loader.style.zIndex = "10"
+    loader.style.margin = "auto"
+    loader.style.display = "none"
+
+    previewDiv.appendChild(preview)
+    previewDiv.appendChild(loader)
+
+    wrapper.appendChild(previewDiv)
 
     return wrapper
 }
@@ -46,27 +77,35 @@ function setPropAny<T>(x: T, key: string, val: string) {
     xAny[key] = val
 }
 
+function makeCanvas(id: string): HTMLCanvasElement {
+    const preview = <HTMLCanvasElement> document.createElement("canvas")
+    preview.id = id
+    preview.width = 500
+    preview.height = 500
+    preview.style.width = "500px"
+    preview.style.height = "500px"
+    preview.style.backgroundColor = "#555555"
+
+    return preview
+}
+
+function setGridLoc(el: HTMLElement, gridRow: string, gridColumn: string) {
+    setPropAny(el.style, "grid-row", gridRow)
+    setPropAny(el.style, "grid-column", gridColumn)
+}
+
 function segmentationHtml() {
     const h2 = document.createElement("h2")
     h2.innerHTML = "Step 2: Segmentation"
-    setPropAny(h2.style, "grid-row", "1")
-    setPropAny(h2.style, "grid-column", "1 / 3")
+    setGridLoc(h2, "1", "1 / 3")
 
     const wrapper = document.createElement("div")
     wrapper.style.display = "grid"
     setPropAny(wrapper.style, "grid-template-columns", "repeat(2, 1fr)")
     setPropAny(wrapper.style, "grid-gap", "10px")
 
-    const preview = <HTMLCanvasElement> document.createElement("canvas")
-    preview.id = "segmentation-preview"
-    preview.width = 500
-    preview.height = 500
-    preview.style.width = "500px"
-    preview.style.height = "500px"
-    preview.style.backgroundColor = "#555555"
-    const previewAny = <any> preview.style
-    setPropAny(preview.style, "grid-row", "2")
-    setPropAny(preview.style, "grid-column", "2 / 3")
+    const preview = makeCanvas("segmentation-preview")
+    setGridLoc(preview, "2", "2 / 3")
 
     const maxComputeDimension =
         makeNumberInput("maxComputeDimension", "Max image dimension",
@@ -79,8 +118,7 @@ function segmentationHtml() {
                         "Distance to high saturation",
                         Lib.defaultParams.distanceToHighSaturation, true)
     const controls = document.createElement("div")
-    setPropAny(controls.style, "grid-row", "2")
-    setPropAny(controls.style, "grid-column", "1 / 2")
+    setGridLoc(controls, "2", "1 / 2")
     for (const x of [maxComputeDimension, saturationThreshold, distanceToHighSaturation]) {
         controls.appendChild(x)
         controls.appendChild(document.createElement("br"))
@@ -153,6 +191,11 @@ async function fileChanged(e: Event) {
     let fileList: FileList = input.files
     let file: File = fileList[0]
     let fileReader = new FileReader()
+
+    // document.querySelector("img#original-preview").classList.add("loader")
+    const loader = <HTMLElement> document.querySelector("div#original-preview-loader")
+    loader.style.removeProperty("display")
+
     let buffer: ArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
         fileReader.onload = () => resolve(fileReader.result)
         fileReader.onerror = err => reject(err)
@@ -162,7 +205,10 @@ async function fileChanged(e: Event) {
     console.log("got buffer")
     let {mat, imageUrl} = await Lib.pdfToImgArray(buffer)
     console.log("got mat")
+    loader.style.display = "none"
 
+    let img = <HTMLImageElement> document.querySelector("img#original-preview")
+    img.src = imageUrl
 
     const fabricDiv = document.querySelector("div#fabric-container")
     // const divWidth = (<any> fabricDiv).offsetWidth
@@ -225,13 +271,13 @@ async function fileChanged(e: Event) {
             // Don't go to top of page
             e.preventDefault()
 
-            if (mapState.konvaMarkers.has(i)) {
+            if (appState.konvaMarkers.has(i)) {
                 // TODO This is ratchet, don't use alert.
                 alert("Marker " + i + " already dropped")
             } else {
                 // TODO Make the marker show the marker index
                 const marker = L.marker(imgMap.getCenter(), { draggable: true }).addTo(imgMap)
-                mapState.konvaMarkers.set(i, marker)
+                appState.konvaMarkers.set(i, marker)
                 marker.on("moveend", recomputeCorrespondence)
             }
         }
@@ -317,7 +363,7 @@ function compute(img: cv.Mat, params: Lib.Params): cv.Mat {
     return largeImageQuantized
 }
 
-let mapState = {
+let appState = {
     leafletMarkers: new Map<number, L.Marker>(),
     konvaMarkers:   new Map<number, L.Marker>()
 }
@@ -390,13 +436,13 @@ function makeMap() {
             // Don't go to top of page
             e.preventDefault()
 
-            if (mapState.leafletMarkers.has(i)) {
+            if (appState.leafletMarkers.has(i)) {
                 // TODO This is ratchet, don't use alert.
                 alert("Marker " + i + " already dropped")
             } else {
                 // TODO Make the marker show the marker index
                 const marker = L.marker(map.getCenter(), { draggable: true }).addTo(map)
-                mapState.leafletMarkers.set(i, marker)
+                appState.leafletMarkers.set(i, marker)
                 marker.on("moveend", recomputeCorrespondence)
             }
         }
@@ -407,10 +453,10 @@ function makeMap() {
 
 function recomputeCorrespondence() {
     const pairs = new Array<[L.LatLng, L.LatLng]>()
-    for (let entry of mapState.konvaMarkers) {
-        if (mapState.leafletMarkers.has(entry[0])) {
+    for (let entry of appState.konvaMarkers) {
+        if (appState.leafletMarkers.has(entry[0])) {
             pairs.push([entry[1].getLatLng(),
-                        mapState.leafletMarkers.get(entry[0]).getLatLng()])
+                        appState.leafletMarkers.get(entry[0]).getLatLng()])
         }
     }
     if (pairs.length > 1) {
