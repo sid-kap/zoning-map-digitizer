@@ -6,6 +6,24 @@ Most cities publish their zoning maps, but most only publish them in PDF formats
 
 Ultimately, the goal is to make this part of a larger project of collecting zoning maps from across the US into a standardized format. Hopefully, that format would, in addition to the geographical zoning data, also include metadata about each zone (like allowed uses, FAR and height limits, etc.). The collected zoning maps could later be made into an interactive map that allows you to explore the zoning of all the included cities from a single place.
 
+## Technical overview
+
+Most modern computer-generated zoning maps tend to have a few common features:
+* Each zone is usually drawn in a different color
+* The main part of the map is usually drawn in very saturated colors, with the background usually in a faded gray color
+* Cities tend to be shaped as one connected component
+* The same colors are sometimes used elsewhere in the map (for example, in a map legend), but that is usually on the borders of the map (outside the main connected component that represents the city map)
+
+This project takes advantage of these characteristics to make extracting the zones from the map easier and faster.
+
+(Will probably add more details here later.)
+
+## Software stack
+
+Because I needed an interactive graphical user interface, I decided to make this a webapp. But at the same time, it also needs access to image-processing utilities. Since the most popular image processing utilities are server-side libraries (such as scipy, OpenCV, and Pillow), the obvious choice would be to do the image processing on a Python server and the user interface in a web front-end. However, to avoid the overhead of writing a client-server application, I chose to write the whole thing on the client-side. This was only possible because of new web technologies that allow writing high-performance image-processing code on the client side—namely, WebAssembly and OpenCV.js.
+
+Ultimately it will be served from a web server, but a static server will suffice because all computation will be on the front-end.
+
 ## Steps:
 - [x] load PDF file
 - [x] isolate a large, highly-saturated section in the middle of the map (zoning map always uses very saturated colors)
