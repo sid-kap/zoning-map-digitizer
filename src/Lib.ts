@@ -98,10 +98,10 @@ export const defaultParams: Params = {
 export const defaultNumColors = 25
 export const defaultKMeansIterations = 5
 
-export function contourToGeoJSON(contour: cv.Mat): GeoJSON.Polygon {
+export function contourToGeoJSON(contour: cv.Mat, numRows: number): GeoJSON.Polygon {
     const positions: GeoJSON.Position[] = []
     for (let i = 0; i < contour.rows; i++) {
-        positions.push([contour.data32S[2*i], contour.data32S[2*i+1]])
+        positions.push([contour.data32S[2*i], numRows - contour.data32S[2*i+1]])
     }
     return {
         type: "Polygon",

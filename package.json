@@ -4,6 +4,7 @@
     "@types/leaflet": "^1.2.5",
     "@types/node": "^9.4.0",
     "@types/pdfjs-dist": "^0.1.1",
+    "@types/tinycolor2": "^1.4.0",
     "css-loader": "^0.28.9",
     "expose-loader": "^0.7.4",
     "file-loader": "^1.1.6",
@@ -20,7 +21,7 @@
     "sass-loader": "^6.0.6",
     "smr": "^0.12.6",
     "style-loader": "^0.20.1",
-    "ts-loader": "^3.4.0",
+    "tinycolor2": "^1.4.1",
     "typed-web-workers": "^2.1.1",
     "typescript": "^2.7.1",
     "url-loader": "^0.6.2"
@@ -32,8 +33,10 @@
   },
   "devDependencies": {
     "@types/webpack": "^3.8.5",
+    "cache-loader": "^1.2.0",
     "copy-webpack-plugin": "^4.4.1",
     "rust-native-wasm-loader": "^0.2.7",
+    "ts-loader": "^3.4.0",
     "ts-node": "^4.1.0",
     "wasm-loader": "^1.1.0",
     "webpack": "^3.10.0",

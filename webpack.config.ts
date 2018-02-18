@@ -60,7 +60,7 @@ const config: webpack.Configuration = {
             {
                 test:    /\.tsx?$/,
                 exclude: /node_modules/,
-                loader:  'ts-loader',
+                loaders: ['cache-loader', 'ts-loader'],
             },
             {
                 test: /\.woff(2)?(\?v=[0-9]\.[0-9]\.[0-9])?$/,
@@ -94,17 +94,23 @@ const config: webpack.Configuration = {
             },
             {
                 test: require.resolve('opencv.js'),
-                use: [{
+                use: [
+                    'cache-loader',
+                    {
                     loader: 'expose-loader',
                     options: 'cv',
-                }],
+                    }
+                ],
             },
             {
                 test: require.resolve('pdfjs-dist'),
-                use: [{
+                use: [
+                    'cache-loader',
+                    {
                     loader: 'expose-loader',
                     options: 'PDFJS',
-                }],
+                    }
+                ],
             }
         ],
 

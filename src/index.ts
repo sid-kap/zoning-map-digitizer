@@ -5,6 +5,7 @@ import "./index.scss"
 import * as Lib from "./Lib.ts"
 import * as cv from "opencv.js"
 import * as L from "leaflet"
+import * as tinycolor from "tinycolor2"
 const GeoSearch = require("leaflet-geosearch")
 
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
@@ -18,6 +19,7 @@ let appState = {
     correspondence: <number[][]> null,
     leafletMarkers: new Map<number, L.Marker>(),
     konvaMarkers:   new Map<number, L.Marker>(),
+    colors: <Array<[number,number,number]>> null,
     colorPolygons: <{colorIndex: number, polygon: GeoJSON.Polygon}[]> null,
 }
 
@@ -215,7 +217,9 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
 
     button.onclick = () => {
         button.disabled = true
-        appState.colorPolygons = findPolygons(+numColors.input.value, +kMeansIterations.input.value) // , +polyAccuracy.input.value)
+        const result = findPolygons(+numColors.input.value, +kMeansIterations.input.value) // , +polyAccuracy.input.value)
+        appState.colorPolygons = result.polygons
+        appState.colors = result.colors
         polygonsChanged()
         button.disabled = false
         // const imageUrl = Lib.matToDataURL(appState.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
@@ -254,71 +258,117 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
 
     appRefs.polygonsMap = map
 
-    const polygonsList = document.querySelector("div#polygons-list")
+    // const polygonsList = document.querySelector("div#polygons-list")
 
-    const sample1 = 
-        {
-            colorIndex: 1,
-            color: [50, 40, 30],
-            polygon: 0, // add GeoJSON shape here?
-        }
-    const sample2 = 
-        {
-            colorIndex: 2,
-            color: [50, 40, 30],
-            polygon: 0,
-        }
-    const samplePolygons = [
-        sample1, 
-        sample1, 
-        sample1, 
-        sample1, 
-        sample1, 
-        sample1, 
-        sample1, 
-        sample2, 
-        sample2, 
-        sample2, 
-        sample2, 
-        sample2, 
-        sample2, 
-        sample2, 
-    ]
+    // const poly: GeoJSON.Polygon = { type: "Polygon", coordinates: [] }
+    // const sample1 =
+    //     {
+    //         colorIndex: 1,
+    //         color: [50, 40, 30],
+    //         polygon: poly,
+    //     }
+    // const sample2 =
+    //     {
+    //         colorIndex: 2,
+    //         color: [50, 40, 30],
+    //         polygon: poly,
+    //     }
+    // const samplePolygons = [
+    //     sample1,
+    //     sample1,
+    //     sample1,
+    //     sample1,
+    //     sample1,
+    //     sample1,
+    //     sample1,
+    //     sample2,
+    //     sample2,
+    //     sample2,
+    //     sample2,
+    //     sample2,
+    //     sample2,
+    //     sample2,
+    // ]
 
-    for (const poly of samplePolygons) {
-        const listElement = document.createElement("div")
-        listElement.classList.add("polygon-list-element")
-
-        const colorPreview = document.createElement("div")
-        colorPreview.style.backgroundColor = "#ffffff"
-        colorPreview.classList.add("color-preview")
-
-        const title = document.createElement("div")
-        title.classList.add("title")
-        title.innerHTML = "Color index: " + poly.colorIndex
-
-        listElement.appendChild(colorPreview)
-        listElement.appendChild(title)
-
-        polygonsList.appendChild(listElement)
-    }
+    // for (const poly of samplePolygons) {
+    //     const listElement = document.createElement("div")
+    //     renderPolygon(poly.colorIndex, poly.polygon, listElement)
+    //     polygonsList.appendChild(listElement)
+    // }
 }
 
-function getCenter(): [number, number] {
-    const x0 = appState.correspondence[2][0]
-    const y0 = appState.correspondence[2][1]
+function getCenter(): L.LatLng {
+    // const x0 = appState.correspondence[2][0]
+    // const y0 = appState.correspondence[2][1]
 
-    const x1 = appState.correspondence[0][0] * appState.originalImg.cols +
-        appState.correspondence[1][0] * appState.originalImg.rows +
+    // const x1 = appState.correspondence[0][0] * appState.originalImg.cols +
+    //     appState.correspondence[1][0] * appState.originalImg.rows +
+    //     appState.correspondence[2][0] * 1
+
+    // const y1 = appState.correspondence[0][1] * appState.originalImg.cols +
+    //     appState.correspondence[1][1] * appState.originalImg.rows +
+    //     appState.correspondence[2][1] * 1
+
+    // return [(x0 + x1) / 2, (y0 + y1) / 2]
+
+    const p0 = pixelToLatLng(L.latLng(0, 0))
+    const p1 = pixelToLatLng(L.latLng(appState.originalImg.cols, appState.originalImg.rows))
+    return L.latLng((p0.lat + p1.lat) / 2, (p0.lng + p1.lng) / 2)
+}
+
+function pixelToLatLng(pixel: L.LatLng) {
+    const lat = appState.correspondence[0][0] * pixel.lat +
+        appState.correspondence[1][0] * pixel.lng +
         appState.correspondence[2][0] * 1
 
-    const y1 = appState.correspondence[0][1] * appState.originalImg.cols +
-        appState.correspondence[1][1] * appState.originalImg.rows +
+    const lng = appState.correspondence[0][1] * pixel.lat +
+        appState.correspondence[1][1] * pixel.lng +
         appState.correspondence[2][1] * 1
-    return [(x0 + x1) / 2, (y0 + y1) / 2]
+    return L.latLng(lat, lng)
+}
+
+function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polygon,
+                       div: HTMLDivElement) {
+    div.classList.add("polygon-list-element")
+
+    const colorPreview = document.createElement("div")
+    const color = appState.colors[colorIndex]
+    colorPreview.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`
+    colorPreview.classList.add("color-preview")
+
+    const title = document.createElement("div")
+    title.classList.add("title")
+    title.innerHTML = "Color index: " + colorIndex
+
+    div.dataset.polygonIndex = index
+
+    const polyImgCoords = L.GeoJSON.coordsToLatLngs(polygon.coordinates, 1)
+    const polyLatLng = polyImgCoords.map(
+        v => v.map( (point: L.LatLng) => pixelToLatLng(point)))
+
+    const leafletPoly = L.polygon(polyLatLng,
+                                  { color: tinycolor({r: color[0],
+                                                      g: color[1],
+                                                      b: color[2]}).toHexString() })
+    console.log(leafletPoly)
+    div.onmouseenter = () => {
+        console.log("mouse entered")
+        appRefs.polygonsMap.addLayer(leafletPoly)
+    }
+    div.onmouseleave = () => appRefs.polygonsMap.removeLayer(leafletPoly)
+
+    div.appendChild(colorPreview)
+    div.appendChild(title)
 }
 
 function polygonsChanged() {
+    const polygonsList = document.querySelector("div#polygons-list")
+    for (const ix in appState.colorPolygons) {
+        const poly = appState.colorPolygons[ix]
+        const listElement = document.createElement("div")
+        renderPolygon(poly.colorIndex, ix, poly.polygon, listElement)
+        polygonsList.appendChild(listElement)
+    }
 }
 
 function main() {
@@ -349,15 +399,15 @@ function setupCorrespondenceImgMap(imageUrl: string, mat: cv.Mat) {
     fabricDiv.appendChild(imgMapEl)
 
     const zoomFactor = 1 / 8
-    const zoomedCRS = L.Util.extend(L.CRS.Simple, {
-        transformation: new L.Transformation(zoomFactor, 0, -zoomFactor, 0),
-    })
+    // const zoomedCRS = L.Util.extend(L.CRS.Simple, {
+    //     transformation: new L.Transformation(zoomFactor, 0, -zoomFactor, 0),
+    // })
 
     const imgMap = new L.Map("img-map", {
-        // crs: L.CRS.Simple,
-        crs: zoomedCRS,
-        // minZoom: 1,
-        // maxZoom: 10,
+        crs: L.CRS.Simple,
+        // crs: zoomedCRS,
+        minZoom: -10,
+        maxZoom: 10,
         center: [mat.cols / 2, mat.rows / 2],
         zoom: 1,
     })
@@ -412,7 +462,8 @@ function segmentationStep(maxComputeDimension: number, saturationThreshold: numb
 }
 
 function findPolygons(numColors: number, kMeansIterations: number):
-    {colorIndex: number, polygon: GeoJSON.Polygon}[] {
+    {colors: Array<[number,number,number]>,
+    polygons: {colorIndex: number, polygon: GeoJSON.Polygon}[]} {
     // Do k-means to get the colors from the scaledDown image.
     // (We use the smaller image because it's faster.)
     const centers = Lib.getColors(appState.smallerMaskedImage, numColors, kMeansIterations)
@@ -433,6 +484,7 @@ function findPolygons(numColors: number, kMeansIterations: number):
     //     data: largeImageColor.data.buffer
     // }
 
+    const numRows = largeImageColor.rows
     const geojsonPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[] = []
 
     for (let i = 0; i < numColors; i++) {
@@ -450,10 +502,17 @@ function findPolygons(numColors: number, kMeansIterations: number):
             //     // TODO also save the color index with it!
             //     console.log(poly.type())
             //     polygons.push_back(poly)
-                geojsonPolygons.push({colorIndex: i, polygon: Lib.contourToGeoJSON(poly)})
+                geojsonPolygons.push({colorIndex: i, polygon: Lib.contourToGeoJSON(poly, numRows)})
             }
 
         }
+    }
+
+    const colors = new Array<[number,number,number]>()
+    for (let i = 0; i < centers.rows; i++) {
+        colors.push([centers.data[3 * i],
+                     centers.data[3 * i + 1],
+                     centers.data[3 * i + 2]])
     }
 
     // console.log("about to draw")
@@ -462,7 +521,7 @@ function findPolygons(numColors: number, kMeansIterations: number):
 
     centers.delete()
 
-    return geojsonPolygons
+    return {colors, polygons: geojsonPolygons}
 }
 
 function makeCorrespondenceMap(wrapper: HTMLDivElement) {
@@ -477,7 +536,7 @@ function makeCorrespondenceMap(wrapper: HTMLDivElement) {
         provider: new GeoSearch.OpenStreetMapProvider(),
     })
 
-    const map = new L.Map("leaflet-map-container").setView([37.773972, -122.431297], 13)
+    const map = new L.Map("img-map").setView([37.773972, -122.431297], 13)
     L.tileLayer(
         "https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}", {
         attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
@@ -548,8 +607,8 @@ function recomputeCorrespondence() {
             if (appState.leafletMarkers.has(entry[0])) {
                 const imgLL = entry[1].getLatLng()
                 const trueLL = appState.leafletMarkers.get(entry[0]).getLatLng()
-                pairs.push([L.latLng(imgLL.lat * 8, imgLL.lng * 8),
-                            L.latLng(trueLL.lat * 8, trueLL.lng * 8)])
+                pairs.push([L.latLng(imgLL.lat, imgLL.lng),
+                            L.latLng(trueLL.lat, trueLL.lng)])
             }
         }
 
