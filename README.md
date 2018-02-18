@@ -8,6 +8,17 @@ Ultimately, the goal is to make this part of a larger project of collecting zoni
 
 ## Technical overview
 
+This is designed to work with zoning maps like the following:
+* [Torrance, CA](https://www.torranceca.gov/home/showdocument?id=2784)
+* [Downey, CA](http://www.downeyca.org/civicax/filebank/blobdload.aspx?BlobID=5149)
+* [Maywood, CA](https://evogov.s3.amazonaws.com/media/100/media/35931.pdf)
+* [Commerce, CA](http://www.ci.commerce.ca.us/DocumentCenter/Home/View/349)
+* [Pico Rivera, CA](http://www.pico-rivera.org/civicax/filebank/blobdload.aspx?blobid=2692)
+* [South Pasadena, CA](http://www.ci.south-pasadena.ca.us/modules/showdocument.aspx?documentid=192)
+* [Glendale, CA](http://www.glendaleca.gov/home/showdocument?id=654)
+* [Burbank, CA](http://www.burbankca.gov/home/showdocument?id=2620)
+* [Berkeley, CA](https://www.cityofberkeley.info/uploadedFiles/IT/Level_3_-_General/Zoning%20Map%2036x36%2020050120.pdf)
+
 Most modern computer-generated zoning maps tend to have a few common features:
 * Each zone is usually drawn in a different color
 * The main part of the map is usually drawn in very saturated colors, with the background usually in a faded gray color
