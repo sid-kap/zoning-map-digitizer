@@ -9,6 +9,22 @@ const GeoSearch = require("leaflet-geosearch")
 
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
 
+let appState = {
+    originalImg: <cv.Mat> null,
+    scaledDown: <cv.Mat> null,
+    maskedImage: <cv.Mat> null,
+    smallerMaskedImage: <cv.Mat> null,
+    userInputCorrespondence: false,
+    correspondence: <number[][]> null,
+    leafletMarkers: new Map<number, L.Marker>(),
+    konvaMarkers:   new Map<number, L.Marker>(),
+    colorPolygons: <{colorIndex: number, polygon: GeoJSON.Polygon}[]> null,
+}
+
+let appRefs = {
+    polygonsMap: <L.Map> null,
+}
+
 main()
 
 let paramsValue: Lib.Params = Lib.defaultParams
@@ -33,14 +49,20 @@ function makeUploadStep(wrapper: HTMLDivElement) {
         })
         console.log("got buffer")
         let {mat, imageUrl} = await Lib.pdfToImgArray(buffer)
-        appState.originalImg = mat
+
+        let mat3 = new cv.Mat()
+        // drop the alpha
+        cv.cvtColor(mat, mat3, cv.COLOR_RGBA2RGB)
+        mat.delete()
+
+        appState.originalImg = mat3
         console.log("got mat")
         loader.style.display = "none"
 
         let img = <HTMLImageElement> document.querySelector("img#original-preview")
         img.src = imageUrl
 
-        setupCorrespondenceImgMap(imageUrl, mat)
+        setupCorrespondenceImgMap(imageUrl, mat3)
 
         // Unblock step 2
         toggleStep(document.querySelector("div#step2"), true)
@@ -193,7 +215,8 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
 
     button.onclick = () => {
         button.disabled = true
-        findPolygons(+numColors.input.value, +kMeansIterations.input.value) // , +polyAccuracy.input.value)
+        appState.colorPolygons = findPolygons(+numColors.input.value, +kMeansIterations.input.value) // , +polyAccuracy.input.value)
+        polygonsChanged()
         button.disabled = false
         // const imageUrl = Lib.matToDataURL(appState.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
         // preview.src = imageUrl
@@ -201,7 +224,7 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
         // toggleStep(document.querySelector("div#step4"), true)
     }
 
-    wrapper.style.maxWidth = "70em"
+    wrapper.style.maxWidth = "100em"
     wrapper.appendChild(numColors.label)
     wrapper.appendChild(document.createElement("br"))
     wrapper.appendChild(kMeansIterations.label)
@@ -209,6 +232,37 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
     // wrapper.appendChild(polyAccuracy.label)
     // wrapper.appendChild(document.createElement("br"))
     wrapper.appendChild(button)
+
+    const leafletDiv = <HTMLElement> document.querySelector("div#polygons-map-container")
+    leafletDiv.style.height = "800px"
+
+    const map = new L.Map("polygons-map-container").setView([37.773972, -122.431297], 13)
+    L.tileLayer(
+        "https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}", {
+        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+        maxZoom: 18,
+        id: "mapbox.streets",
+        accessToken: "pk.eyJ1Ijoic2lkLWthcCIsImEiOiJjamRpNzU2ZTMxNWE0MzJtZjAxbnphMW5mIn0.b6m4jgFhPOPOYOoaNGmogQ",
+    }).addTo(map)
+
+    appRefs.polygonsMap = map
+}
+
+function getCenter(): [number, number] {
+    const x0 = appState.correspondence[2][0]
+    const y0 = appState.correspondence[2][1]
+
+    const x1 = appState.correspondence[0][0] * appState.originalImg.cols +
+        appState.correspondence[1][0] * appState.originalImg.rows +
+        appState.correspondence[2][0] * 1
+
+    const y1 = appState.correspondence[0][1] * appState.originalImg.cols +
+        appState.correspondence[1][1] * appState.originalImg.rows +
+        appState.correspondence[2][1] * 1
+    return [(x0 + x1) / 2, (y0 + y1) / 2]
+}
+
+function polygonsChanged() {
 }
 
 function main() {
@@ -301,7 +355,8 @@ function segmentationStep(maxComputeDimension: number, saturationThreshold: numb
     appState.smallerMaskedImage = smallerMaskedImage
 }
 
-function findPolygons(numColors: number, kMeansIterations: number): cv.Mat {
+function findPolygons(numColors: number, kMeansIterations: number):
+    {colorIndex: number, polygon: GeoJSON.Polygon}[] {
     // Do k-means to get the colors from the scaledDown image.
     // (We use the smaller image because it's faster.)
     const centers = Lib.getColors(appState.smallerMaskedImage, numColors, kMeansIterations)
@@ -313,7 +368,7 @@ function findPolygons(numColors: number, kMeansIterations: number): cv.Mat {
     // console.log(hist)
     const largestColor = hist[0][0]
 
-    const polygons = new cv.MatVector()
+    // const polygons = new cv.MatVector()
 
     // const serializedImg: Lib.SerializedMat = {
     //     rows: largeImageColor.rows,
@@ -321,6 +376,8 @@ function findPolygons(numColors: number, kMeansIterations: number): cv.Mat {
     //     type: largeImageColor.type(),
     //     data: largeImageColor.data.buffer
     // }
+
+    const geojsonPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[] = []
 
     for (let i = 0; i < numColors; i++) {
         // Skip the background color
@@ -334,10 +391,12 @@ function findPolygons(numColors: number, kMeansIterations: number): cv.Mat {
 
             const polys = Lib.getColorPolygons(largeImageColor, i)
             for (const poly of polys) {
-                // TODO also save the color index with it!
-                console.log(poly.type())
-                polygons.push_back(poly)
+            //     // TODO also save the color index with it!
+            //     console.log(poly.type())
+            //     polygons.push_back(poly)
+                geojsonPolygons.push({colorIndex: i, polygon: Lib.contourToGeoJSON(poly)})
             }
+
         }
     }
 
@@ -347,33 +406,22 @@ function findPolygons(numColors: number, kMeansIterations: number): cv.Mat {
 
     centers.delete()
 
-    return largeImageQuantized
-}
-
-let appState = {
-    originalImg: <cv.Mat> null,
-    scaledDown: <cv.Mat> null,
-    maskedImage: <cv.Mat> null,
-    smallerMaskedImage: <cv.Mat> null,
-    userInputCorrespondence: false,
-    correspondence: <number[][]> null,
-    leafletMarkers: new Map<number, L.Marker>(),
-    konvaMarkers:   new Map<number, L.Marker>()
+    return geojsonPolygons
 }
 
 function makeCorrespondenceMap(wrapper: HTMLDivElement) {
     const leafletDiv = <HTMLElement> document.querySelector("div#leaflet-map-container")
 
-    const mapEl = document.createElement("div")
-    mapEl.id = "map"
-    mapEl.style.height = "400px"
-    leafletDiv.appendChild(mapEl)
+    const imgMapEl = document.createElement("div")
+    imgMapEl.id = "img-map"
+    imgMapEl.style.height = "400px"
+    leafletDiv.appendChild(imgMapEl)
 
     const searchControl = new GeoSearch.GeoSearchControl({
         provider: new GeoSearch.OpenStreetMapProvider(),
     })
 
-    const map = new L.Map('map').setView([37.773972, -122.431297], 13)
+    const map = new L.Map("leaflet-map-container").setView([37.773972, -122.431297], 13)
     L.tileLayer(
         "https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}", {
         attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
@@ -412,12 +460,14 @@ function makeCorrespondenceMap(wrapper: HTMLDivElement) {
     const matrixInput = document.createElement("input")
     matrixInput.oninput = () => {
         const val = JSON.parse(matrixInput.value)
-        if (val instanceof Array && val.length == 2
-            && val[0].length == 3
-            && val[1].length == 3) {
+        if (val instanceof Array && val.length == 3
+            && val[0].length == 2
+            && val[1].length == 2
+            && val[2].length == 2) {
             appState.correspondence = val
             appState.userInputCorrespondence = true
             matrixOutput.innerHTML = "Using inputted transformation: " + val
+            correspondenceChanged()
         } else {
             appState.userInputCorrespondence = false
             console.log("Found", val, "not expected form of array")
@@ -440,8 +490,10 @@ function recomputeCorrespondence() {
         const pairs = new Array<[L.LatLng, L.LatLng]>()
         for (let entry of appState.konvaMarkers) {
             if (appState.leafletMarkers.has(entry[0])) {
-                pairs.push([entry[1].getLatLng(),
-                            appState.leafletMarkers.get(entry[0]).getLatLng()])
+                const imgLL = entry[1].getLatLng()
+                const trueLL = appState.leafletMarkers.get(entry[0]).getLatLng()
+                pairs.push([L.latLng(imgLL.lat * 8, imgLL.lng * 8),
+                            L.latLng(trueLL.lat * 8, trueLL.lng * 8)])
             }
         }
 
@@ -451,11 +503,16 @@ function recomputeCorrespondence() {
             appState.correspondence = correspondence
             matrixOutput.innerHTML = "Found correspondence: " + JSON.stringify(correspondence)
             console.log("Found correspondence", correspondence)
+            correspondenceChanged()
         } else {
             console.log("Tried to recompute but not enough points")
             matrixOutput.innerHTML = "Tried to recompute but not enough points"
         }
     }
+}
+
+function correspondenceChanged() {
+    appRefs.polygonsMap.setView(getCenter(), 13)
 }
 
 function toggleStep(div: HTMLElement, enable: boolean) {

@@ -514,7 +514,7 @@ function reshapeMat(mat: cv.Mat, rows: number, cols: number, newTpe: cv.MatType)
 
 // imgPoints are not _really_ latitude/longitudes, but they're represented using the LatLng
 // data type because they were picked using Leaflet as well.
-export function regressLatLong(pairs: Array<[L.LatLng, L.LatLng]>) {
+export function regressLatLong(pairs: Array<[L.LatLng, L.LatLng]>): number[][] {
     let regression = new smr.Regression({ numX: 3, numY: 2 })
     for (let pair of pairs) {
         regression.push({x: [pair[0].lat, pair[0].lng, 1],
