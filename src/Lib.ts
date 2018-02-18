@@ -95,6 +95,19 @@ export const defaultParams: Params = {
     distanceToHighSaturation: 5,
     polyAccuracy: 10,
 }
+export const defaultNumColors = 25
+export const defaultKMeansIterations = 5
+
+export function contourToGeoJSON(contour: cv.Mat): GeoJSON.Polygon {
+    const positions: GeoJSON.Position[] = []
+    for (let i = 0; i < contour.rows; i++) {
+        positions.push([contour.data32S[2*i], contour.data32S[2*i+1]])
+    }
+    return {
+        type: "Polygon",
+        coordinates: [positions],
+    }
+}
 
 export function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number): Array<cv.Mat>
     {
@@ -143,7 +156,7 @@ export function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number
                 const contoursFlattened = ([] as number[]).concat(...(contour.map(x => [x.col, x.row])))
                 const contourMat = cv.matFromArray(contour.length, 2, cv.CV_32S, contoursFlattened)
                 const approxCurve = new cv.Mat()
-                cv.approxPolyDP(contourMat, approxCurve, 5, true)
+                cv.approxPolyDP(contourMat, approxCurve, 3, true)
 
                 contours.push(approxCurve)
 
@@ -377,7 +390,7 @@ export function largestSaturatedPart(img: cv.Mat, scaledDown: cv.Mat,
     return {maskedImage, smallerMaskedImage}
 }
 
-export function getColors(img: cv.Mat, K: number): cv.Mat {
+export function getColors(img: cv.Mat, K: number, kMeansIterations: number): cv.Mat {
     const labels = new cv.Mat()
     const centers = new cv.Mat()
     // const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 100, 0.1)
@@ -402,13 +415,9 @@ export function getColors(img: cv.Mat, K: number): cv.Mat {
     const pixels = cv.matFromArray(imgFloat.rows * imgFloat.cols,
                                    imgFloat.channels(), cv.CV_32F,
                                    Array.from(imgFloat.data32F))
-    // debugMatrix(pixels)
-    // console.log("done reshaping")
     console.log("Running KMeans")
-    // const iterations = 10
 
-    const iterations = 1 // temporarily, since I'm running this a lot
-    cv.kmeans(pixels, K, labels, criteria, iterations, flags, centers)
+    cv.kmeans(pixels, K, labels, criteria, kMeansIterations, flags, centers)
     console.log("Kmeans finished")
 
     const centers8U = cv.matFromArray(centers.rows, centers.cols, cv.CV_8U,

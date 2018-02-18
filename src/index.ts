@@ -14,6 +14,38 @@ main()
 let paramsValue: Lib.Params = Lib.defaultParams
 
 function makeUploadStep(wrapper: HTMLDivElement) {
+    async function fileChanged(e: Event) {
+        console.log("in fileChanged")
+        let input = <any> document.querySelector("input[name=file]")
+        let fileList: FileList = input.files
+        let file: File = fileList[0]
+        let fileReader = new FileReader()
+
+        // document.querySelector("img#original-preview").classList.add("loader")
+        const loader = <HTMLElement> document.querySelector("div#original-preview-loader")
+        loader.style.removeProperty("display")
+
+        let buffer: ArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+            fileReader.onload = () => resolve(fileReader.result)
+            fileReader.onerror = err => reject(err)
+
+            fileReader.readAsArrayBuffer(file)
+        })
+        console.log("got buffer")
+        let {mat, imageUrl} = await Lib.pdfToImgArray(buffer)
+        appState.originalImg = mat
+        console.log("got mat")
+        loader.style.display = "none"
+
+        let img = <HTMLImageElement> document.querySelector("img#original-preview")
+        img.src = imageUrl
+
+        setupCorrespondenceImgMap(imageUrl, mat)
+
+        // Unblock step 2
+        toggleStep(document.querySelector("div#step2"), true)
+    }
+
     wrapper.style.maxWidth = "70em"
 
     const fileInput = document.createElement("input")
@@ -148,12 +180,35 @@ function makeNumberInput(name: string, labelText: string, defaultValue: number):
 }
 
 function makePolygonSelector(wrapper: HTMLDivElement) {
-    const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy",
-                                         Lib.defaultParams.polyAccuracy)
+    const numColors = makeNumberInput("numColors", "Number of colors",
+                                         Lib.defaultNumColors)
+    const kMeansIterations = makeNumberInput("kMeansIterations", "K-means iterations",
+                                         Lib.defaultKMeansIterations)
+    // const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy",
+    //                                      Lib.defaultParams.polyAccuracy)
+
+    const button = document.createElement("button")
+    button.type = "button"
+    button.innerHTML = "Find polygons"
+
+    button.onclick = () => {
+        button.disabled = true
+        findPolygons(+numColors.input.value, +kMeansIterations.input.value) // , +polyAccuracy.input.value)
+        button.disabled = false
+        // const imageUrl = Lib.matToDataURL(appState.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
+        // preview.src = imageUrl
+        // toggleStep(document.querySelector("div#step3"), true)
+        // toggleStep(document.querySelector("div#step4"), true)
+    }
 
     wrapper.style.maxWidth = "70em"
-    wrapper.appendChild(polyAccuracy.label)
+    wrapper.appendChild(numColors.label)
     wrapper.appendChild(document.createElement("br"))
+    wrapper.appendChild(kMeansIterations.label)
+    wrapper.appendChild(document.createElement("br"))
+    // wrapper.appendChild(polyAccuracy.label)
+    // wrapper.appendChild(document.createElement("br"))
+    wrapper.appendChild(button)
 }
 
 function main() {
@@ -172,54 +227,6 @@ function main() {
     hiddenCanvas.style.display = "none"
     hiddenCanvas.id = "pdfConversion"
     main.appendChild(hiddenCanvas)
-}
-
-async function fileChanged(e: Event) {
-    console.log("in fileChanged")
-    let input = <any> document.querySelector("input[name=file]")
-    let fileList: FileList = input.files
-    let file: File = fileList[0]
-    let fileReader = new FileReader()
-
-    // document.querySelector("img#original-preview").classList.add("loader")
-    const loader = <HTMLElement> document.querySelector("div#original-preview-loader")
-    loader.style.removeProperty("display")
-
-    let buffer: ArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        fileReader.onload = () => resolve(fileReader.result)
-        fileReader.onerror = err => reject(err)
-
-        fileReader.readAsArrayBuffer(file)
-    })
-    console.log("got buffer")
-    let {mat, imageUrl} = await Lib.pdfToImgArray(buffer)
-    appState.originalImg = mat
-    console.log("got mat")
-    loader.style.display = "none"
-
-    let img = <HTMLImageElement> document.querySelector("img#original-preview")
-    img.src = imageUrl
-
-    setupCorrespondenceImgMap(imageUrl, mat)
-
-    // Unblock step 2
-    toggleStep(document.querySelector("div#step2"), true)
-
-    // let mat3 = new cv.Mat()
-    // // drop the alpha
-    // cv.cvtColor(mat, mat3, cv.COLOR_RGBA2RGB)
-    // mat.delete()
-    // let result = compute(mat3, paramsValue)
-
-    // let outputCanvas = <HTMLCanvasElement> document.querySelector("canvas#output")
-    // outputCanvas.style.display = "none"
-    // cv.imshow("output", result)
-    // let output = outputCanvas.toDataURL()
-
-    // let resultLink = document.createElement("a")
-    // resultLink.href = output
-    // resultLink.innerHTML = "Download result"
-    // document.querySelector("div#main").appendChild(resultLink)
 }
 
 // TODO should be able to pass a cv.Shape type here instead of the actual mat
@@ -294,21 +301,19 @@ function segmentationStep(maxComputeDimension: number, saturationThreshold: numb
     appState.smallerMaskedImage = smallerMaskedImage
 }
 
-function compute(): cv.Mat {
+function findPolygons(numColors: number, kMeansIterations: number): cv.Mat {
     // Do k-means to get the colors from the scaledDown image.
     // (We use the smaller image because it's faster.)
-    const numColors = 25
-    const centers = Lib.getColors(appState.smallerMaskedImage, numColors)
+    const centers = Lib.getColors(appState.smallerMaskedImage, numColors, kMeansIterations)
 
     const {labeledByColorIndex: largeImageColor, labeledRGB: largeImageQuantized} = Lib.labelImageByColors(appState.maskedImage, centers)
 
-    console.log("Histogram of colors in image:")
+    // console.log("Histogram of colors in image:")
     const hist = Lib.imageHist(largeImageColor, numColors)
-    console.log(hist)
+    // console.log(hist)
     const largestColor = hist[0][0]
 
     const polygons = new cv.MatVector()
-    const main = document.querySelector("div#main")
 
     // const serializedImg: Lib.SerializedMat = {
     //     rows: largeImageColor.rows,
@@ -328,22 +333,18 @@ function compute(): cv.Mat {
             // worker.postMessage({serializedImg, colorIndex: i})
 
             const polys = Lib.getColorPolygons(largeImageColor, i)
-            for (let poly of polys) {
+            for (const poly of polys) {
                 // TODO also save the color index with it!
+                console.log(poly.type())
                 polygons.push_back(poly)
             }
         }
     }
 
-    console.log("about to draw")
+    // console.log("about to draw")
     // negative number means draw all contours
-    cv.drawContours(largeImageQuantized, polygons, -1, [0,0,255,0], 4)
+    // cv.drawContours(largeImageQuantized, polygons, -1, [0,0,255,0], 4)
 
-    // TODO delete these? or leave them in case we want to re-run this step with
-    // different params?
-    // scaledDown.delete()
-    // maskedImage.delete()
-    // smallerMaskedImage.delete()
     centers.delete()
 
     return largeImageQuantized
