@@ -355,12 +355,13 @@ let appState = {
     scaledDown: <cv.Mat> null,
     maskedImage: <cv.Mat> null,
     smallerMaskedImage: <cv.Mat> null,
+    userInputCorrespondence: false,
+    correspondence: <number[][]> null,
     leafletMarkers: new Map<number, L.Marker>(),
     konvaMarkers:   new Map<number, L.Marker>()
 }
 
 function makeCorrespondenceMap(wrapper: HTMLDivElement) {
-    wrapper.classList.add("step-disabled")
     const leafletDiv = <HTMLElement> document.querySelector("div#leaflet-map-container")
 
     const mapEl = document.createElement("div")
@@ -407,20 +408,53 @@ function makeCorrespondenceMap(wrapper: HTMLDivElement) {
         leafletDiv.appendChild(link)
         leafletDiv.appendChild(document.createElement("br"))
     }
+
+    const matrixInput = document.createElement("input")
+    matrixInput.oninput = () => {
+        const val = JSON.parse(matrixInput.value)
+        if (val instanceof Array && val.length == 2
+            && val[0].length == 3
+            && val[1].length == 3) {
+            appState.correspondence = val
+            appState.userInputCorrespondence = true
+            matrixOutput.innerHTML = "Using inputted transformation: " + val
+        } else {
+            appState.userInputCorrespondence = false
+            console.log("Found", val, "not expected form of array")
+            matrixOutput.outerHTML = "Found " +  val + ", which is not in expected form"
+        }
+    }
+    const matrixOutput = document.createElement("p")
+    matrixOutput.id = "correspondences-output"
+    matrixOutput.innerHTML = "Waiting for you to select coordinates..."
+
+    setGridLoc(matrixInput, "3", "1 / 3")
+    setGridLoc(matrixOutput, "4", "1 / 3")
+
+    wrapper.appendChild(matrixInput)
+    wrapper.appendChild(matrixOutput)
 }
 
 function recomputeCorrespondence() {
-    const pairs = new Array<[L.LatLng, L.LatLng]>()
-    for (let entry of appState.konvaMarkers) {
-        if (appState.leafletMarkers.has(entry[0])) {
-            pairs.push([entry[1].getLatLng(),
-                        appState.leafletMarkers.get(entry[0]).getLatLng()])
+    if (!appState.userInputCorrespondence) {
+        const pairs = new Array<[L.LatLng, L.LatLng]>()
+        for (let entry of appState.konvaMarkers) {
+            if (appState.leafletMarkers.has(entry[0])) {
+                pairs.push([entry[1].getLatLng(),
+                            appState.leafletMarkers.get(entry[0]).getLatLng()])
+            }
         }
-    }
-    if (pairs.length > 1) {
-        console.log(Lib.regressLatLong(pairs))
-    } else {
-        console.log("Tried to recompute but not enough points")
+
+        const matrixOutput = document.querySelector("p#correspondences-output")
+        if (pairs.length > 1) {
+            const correspondence = Lib.regressLatLong(pairs)
+            appState.correspondence = correspondence
+            matrixOutput.innerHTML = "Found correspondence: " + JSON.stringify(correspondence)
+            console.log("Found correspondence", correspondence)
+        } else {
+            console.log("Tried to recompute but not enough points")
+            matrixOutput.innerHTML = "Tried to recompute but not enough points"
+        }
     }
 }
 
