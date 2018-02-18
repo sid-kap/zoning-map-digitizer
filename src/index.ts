@@ -130,11 +130,8 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
     }
     controls.appendChild(button)
 
-    wrapper.classList.add("step-disabled")
     wrapper.appendChild(controls)
     wrapper.appendChild(preview)
-
-    toggleStep(wrapper, false)
 }
 
 function makeNumberInput(name: string, labelText: string, defaultValue: number): {label: HTMLLabelElement, input: HTMLInputElement} {
@@ -150,32 +147,27 @@ function makeNumberInput(name: string, labelText: string, defaultValue: number):
     return {label, input}
 }
 
-function main() {
-    // Make all the HTML elements here because (1) I'm a savage and (2) this is strongly typed, yo.
-    const body = document.querySelector("body")
-    body.style.backgroundColor = "#fbf7ea"
-    body.style.color = "#444444"
-
-    const main = <HTMLElement> document.querySelector("div#main")
-
-    makeUploadStep(document.querySelector("div#step1"))
-
-    makeSegmentationStep(document.querySelector("div#step2"))
-
+function makePolygonSelector(wrapper: HTMLDivElement) {
     const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy",
                                          Lib.defaultParams.polyAccuracy)
 
-    makeMap(document.querySelector("div#step3"))
+    wrapper.style.maxWidth = "70em"
+    wrapper.appendChild(polyAccuracy.label)
+    wrapper.appendChild(document.createElement("br"))
+}
 
-    const step4 = <HTMLElement> document.querySelector("div#step4")
+function main() {
+    makeUploadStep(document.querySelector("div#step1"))
+    makeSegmentationStep(document.querySelector("div#step2"))
+    makeCorrespondenceMap(document.querySelector("div#step3"))
+    makePolygonSelector(document.querySelector("div#step4"))
 
-    step4.style.maxWidth = "70em"
-    step4.appendChild(polyAccuracy.label)
-    step4.appendChild(document.createElement("br"))
-
+    // Disable steps 2, 3, and 4 initially
+    toggleStep(document.querySelector("div#step2"), false)
     toggleStep(document.querySelector("div#step3"), false)
-    toggleStep(step4, false)
+    toggleStep(document.querySelector("div#step4"), false)
 
+    const main = <HTMLElement> document.querySelector("div#main")
     const hiddenCanvas = document.createElement("canvas")
     hiddenCanvas.style.display = "none"
     hiddenCanvas.id = "pdfConversion"
@@ -366,7 +358,7 @@ let appState = {
     konvaMarkers:   new Map<number, L.Marker>()
 }
 
-function makeMap(wrapper: HTMLDivElement) {
+function makeCorrespondenceMap(wrapper: HTMLDivElement) {
     wrapper.classList.add("step-disabled")
     const leafletDiv = <HTMLElement> document.querySelector("div#leaflet-map-container")
 
