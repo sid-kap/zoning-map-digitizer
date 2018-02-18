@@ -98,21 +98,18 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
 
     const maxComputeDimension =
         makeNumberInput("maxComputeDimension", "Max image dimension",
-                        Lib.defaultParams.maxComputeDimension, true)
+                        Lib.defaultParams.maxComputeDimension)
     const saturationThreshold =
         makeNumberInput("saturationThreshold", "Saturation threshold",
-                        Lib.defaultParams.saturationThreshold, true)
+                        Lib.defaultParams.saturationThreshold)
     const distanceToHighSaturation =
         makeNumberInput("distanceToHighSaturation",
                         "Distance to high saturation",
-                        Lib.defaultParams.distanceToHighSaturation, true)
+                        Lib.defaultParams.distanceToHighSaturation)
 
     const button = document.createElement("button")
     button.type = "button"
     button.innerHTML = "Segment image"
-
-    // since the whole panel is disabled right now
-    button.disabled = true
 
     button.onclick = () => {
         button.disabled = true
@@ -121,6 +118,8 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
         button.disabled = false
         const imageUrl = Lib.matToDataURL(appState.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
         preview.src = imageUrl
+        toggleStep(document.querySelector("div#step3"), true)
+        toggleStep(document.querySelector("div#step4"), true)
     }
 
     const controls = document.createElement("div")
@@ -134,16 +133,16 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
     wrapper.classList.add("step-disabled")
     wrapper.appendChild(controls)
     wrapper.appendChild(preview)
+
+    toggleStep(wrapper, false)
 }
 
-function makeNumberInput(name: string, labelText: string, defaultValue: number,
-                         disabled: boolean): {label: HTMLLabelElement, input: HTMLInputElement} {
+function makeNumberInput(name: string, labelText: string, defaultValue: number): {label: HTMLLabelElement, input: HTMLInputElement} {
     const input = document.createElement("input")
     input.type = "number"
     input.name = name
     input.value = defaultValue.toString()
     input.onchange = () => console.log("changed")
-    input.disabled = disabled
 
     const label = document.createElement("label")
     label.innerText = labelText
@@ -164,12 +163,9 @@ function main() {
     makeSegmentationStep(document.querySelector("div#step2"))
 
     const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy",
-                                         Lib.defaultParams.polyAccuracy, true)
+                                         Lib.defaultParams.polyAccuracy)
 
-    const hiddenCanvas = document.createElement("canvas")
-    hiddenCanvas.style.display = "none"
-    hiddenCanvas.id = "pdfConversion"
-    main.appendChild(hiddenCanvas)
+    makeMap(document.querySelector("div#step3"))
 
     const step4 = <HTMLElement> document.querySelector("div#step4")
 
@@ -177,7 +173,13 @@ function main() {
     step4.appendChild(polyAccuracy.label)
     step4.appendChild(document.createElement("br"))
 
-    makeMap(document.querySelector("div#step3"))
+    toggleStep(document.querySelector("div#step3"), false)
+    toggleStep(step4, false)
+
+    const hiddenCanvas = document.createElement("canvas")
+    hiddenCanvas.style.display = "none"
+    hiddenCanvas.id = "pdfConversion"
+    main.appendChild(hiddenCanvas)
 }
 
 async function fileChanged(e: Event) {
@@ -209,15 +211,7 @@ async function fileChanged(e: Event) {
     setupCorrespondenceImgMap(imageUrl, mat)
 
     // Unblock step 2
-    document.querySelector("div#step2").classList.remove("step-disabled")
-    for (const input of Array.from(document.querySelectorAll("div#step2 input"))) {
-        const inp = <HTMLInputElement> input
-        inp.disabled = false
-    }
-    let button = <HTMLButtonElement> document.querySelector("div#step2 button")
-    button.disabled = false
-
-
+    toggleStep(document.querySelector("div#step2"), true)
 
     // let mat3 = new cv.Mat()
     // // drop the alpha
@@ -434,5 +428,19 @@ function recomputeCorrespondence() {
         console.log(Lib.regressLatLong(pairs))
     } else {
         console.log("Tried to recompute but not enough points")
+    }
+}
+
+function toggleStep(div: HTMLElement, enable: boolean) {
+    if (enable) {
+        div.classList.remove("step-disabled")
+    } else {
+        div.classList.add("step-disabled")
+    }
+    for (const input of <[HTMLInputElement]> Array.from(div.querySelectorAll("input"))) {
+        input.disabled = !enable
+    }
+    for (const button of <HTMLButtonElement[]> Array.from(div.querySelectorAll("button"))) {
+        button.disabled = !enable
     }
 }
