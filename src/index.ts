@@ -224,17 +224,24 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
         // toggleStep(document.querySelector("div#step4"), true)
     }
 
+
     wrapper.style.maxWidth = "100em"
-    wrapper.appendChild(numColors.label)
-    wrapper.appendChild(document.createElement("br"))
-    wrapper.appendChild(kMeansIterations.label)
-    wrapper.appendChild(document.createElement("br"))
+
+    const controls = document.createElement("div")
+    setGridLoc(controls, "2", "1 / 2")
+    controls.appendChild(numColors.label)
+    controls.appendChild(document.createElement("br"))
+    controls.appendChild(kMeansIterations.label)
+    controls.appendChild(document.createElement("br"))
     // wrapper.appendChild(polyAccuracy.label)
     // wrapper.appendChild(document.createElement("br"))
-    wrapper.appendChild(button)
+    controls.appendChild(button)
+
+    wrapper.appendChild(controls)
 
     const leafletDiv = <HTMLElement> document.querySelector("div#polygons-map-container")
     leafletDiv.style.height = "800px"
+    leafletDiv.style.width = "100%"
 
     const map = new L.Map("polygons-map-container").setView([37.773972, -122.431297], 13)
     L.tileLayer(
@@ -246,6 +253,55 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
     }).addTo(map)
 
     appRefs.polygonsMap = map
+
+    const polygonsList = document.querySelector("div#polygons-list")
+
+    const sample1 = 
+        {
+            colorIndex: 1,
+            color: [50, 40, 30],
+            polygon: 0, // add GeoJSON shape here?
+        }
+    const sample2 = 
+        {
+            colorIndex: 2,
+            color: [50, 40, 30],
+            polygon: 0,
+        }
+    const samplePolygons = [
+        sample1, 
+        sample1, 
+        sample1, 
+        sample1, 
+        sample1, 
+        sample1, 
+        sample1, 
+        sample2, 
+        sample2, 
+        sample2, 
+        sample2, 
+        sample2, 
+        sample2, 
+        sample2, 
+    ]
+
+    for (const poly of samplePolygons) {
+        const listElement = document.createElement("div")
+        listElement.classList.add("polygon-list-element")
+
+        const colorPreview = document.createElement("div")
+        colorPreview.style.backgroundColor = "#ffffff"
+        colorPreview.classList.add("color-preview")
+
+        const title = document.createElement("div")
+        title.classList.add("title")
+        title.innerHTML = "Color index: " + poly.colorIndex
+
+        listElement.appendChild(colorPreview)
+        listElement.appendChild(title)
+
+        polygonsList.appendChild(listElement)
+    }
 }
 
 function getCenter(): [number, number] {
