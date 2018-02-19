@@ -48,7 +48,7 @@ export async function pdfToImgArray(buffer: ArrayBuffer): Promise<{ mat: cv.Mat,
     // let viewport = page.getViewport(0.3)
 
     let canvas = <HTMLCanvasElement> document.querySelector("canvas#pdfConversion")
-    let context = canvas.getContext("2d")
+    let context = canvas.getContext("2d")!
 
     console.log("about to render page")
     canvas.height = viewport.height
@@ -76,8 +76,8 @@ export function matToDataURL(mat: cv.Mat, canvas: HTMLCanvasElement): string {
     cv.imshow(canvas.id, mat)
     const imageURL = canvas.toDataURL()
     let context = canvas.getContext("2d")
-    context.clearRect(0, 0, canvas.width, canvas.height)
-    return imageURL
+    context!.clearRect(0, 0, canvas.width, canvas.height)
+    return imageURL!
 }
 
 function getHighSaturationRegion(img: cv.Mat): cv.Mat {

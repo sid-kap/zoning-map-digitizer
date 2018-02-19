@@ -34,14 +34,14 @@ interface IStoredAppState {
     id?: number,
     filename: string,
     originalImg: Lib.SerializedMat,
-    scaledDown:  Lib.SerializedMat,
-    maskedImage: Lib.SerializedMat,
-    smallerMaskedImage: Lib.SerializedMat,
-    correspondence: number[][],
-    leafletMarkers: Map<number, L.LatLng>,
-    konvaMarkers:   Map<number, L.LatLng>,
-    colors: Array<[number,number,number]>,
-    colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[],
+    scaledDown:  Lib.SerializedMat | null,
+    maskedImage: Lib.SerializedMat | null,
+    smallerMaskedImage: Lib.SerializedMat | null,
+    correspondence: number[][] | null,
+    leafletMarkers: Map<number, L.LatLng> | null,
+    konvaMarkers:   Map<number, L.LatLng> | null,
+    colors: Array<[number,number,number]> | null,
+    colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[] | null,
 }
 
 interface IFilename {
@@ -49,22 +49,42 @@ interface IFilename {
     filename: string,
 }
 
-let appState = {
-    name: <string> null,
-    originalImg: <cv.Mat> null,
-    scaledDown: <cv.Mat> null,
-    maskedImage: <cv.Mat> null,
-    smallerMaskedImage: <cv.Mat> null,
-    userInputCorrespondence: false,
-    correspondence: <number[][]> null,
-    leafletMarkers: new Map<number, L.Marker>(),
-    konvaMarkers:   new Map<number, L.Marker>(),
-    colors: <Array<[number,number,number]>> null,
-    colorPolygons: <{colorIndex: number, polygon: GeoJSON.Polygon}[]> null,
+type State = {
+    uploadResults: {
+        name: string,
+        originalImg: cv.Mat
+    } | null,
+    segmentationResults: {
+        scaledDown: cv.Mat,
+        maskedImage: cv.Mat,
+        smallerMaskedImage: cv.Mat
+    } | null,
+    correspondenceResults: {
+        userInputCorrespondence: boolean,
+        correspondence: number[][] | null,
+        imgMarkers: Map<number, L.Marker>,
+        mapMarkers: Map<number, L.Marker>,
+    },
+    polygonsResults: {
+        colors: [number, number, number][],
+        colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[]
+    } | null
 }
 
-let appRefs = {
-    polygonsMap: <L.Map> null,
+let appState: State = {
+    uploadResults: null,
+    segmentationResults: null,
+    correspondenceResults: {
+        userInputCorrespondence: false,
+        correspondence: null,
+        imgMarkers: new Map<number, L.Marker>(),
+        mapMarkers: new Map<number, L.Marker>(),
+    },
+    polygonsResults: null,
+}
+
+const appRefs = {
+    polygonsMap: <L.Map | null> null,
 }
 
 const db = new MyAppDatabase()
@@ -82,7 +102,6 @@ function makeUploadStep(wrapper: HTMLDivElement) {
         let input = <any> document.querySelector("input[name=file]")
         let fileList: FileList = input.files
         let file: File = fileList[0]
-        appState.name = file.name
         let fileReader = new FileReader()
 
         // document.querySelector("img#original-preview").classList.add("loader")
@@ -103,7 +122,7 @@ function makeUploadStep(wrapper: HTMLDivElement) {
         cv.cvtColor(mat, mat3, cv.COLOR_RGBA2RGB)
         mat.delete()
 
-        appState.originalImg = mat3
+        appState.uploadResults = { name: file.name, originalImg: mat3 }
         console.log("got mat")
         loader.style.display = "none"
 
@@ -112,13 +131,14 @@ function makeUploadStep(wrapper: HTMLDivElement) {
 
         setupCorrespondenceImgMap(imageUrl, mat3)
 
+
         // Unblock step 2
-        toggleStep(document.querySelector("div#step2"), true)
+        toggleStep(<HTMLElement> document.querySelector("div#step2"), true)
 
         // make this saveable
         const newFileOption = <HTMLOptionElement> document.querySelector("option#new-file-option")
-        newFileOption.value = appState.name
-        newFileOption.innerHTML = appState.name + " (new file)"
+        newFileOption.value = appState.uploadResults.name
+        newFileOption.innerHTML = appState.uploadResults.name + " (new file)"
     }
 
     wrapper.style.maxWidth = "70em"
@@ -222,11 +242,14 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
         button.disabled = true
         segmentationStep(+maxComputeDimension.input.value, +saturationThreshold.input.value,
                          +distanceToHighSaturation.input.value)
+        if (appState.segmentationResults == null) {
+            throw new Error("this is impossible, segmentationStep sets the segementation results")
+        }
         button.disabled = false
-        const imageUrl = Lib.matToDataURL(appState.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
+        const imageUrl = Lib.matToDataURL(appState.segmentationResults.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
         preview.src = imageUrl
-        toggleStep(document.querySelector("div#step3"), true)
-        toggleStep(document.querySelector("div#step4"), true)
+        toggleStep(<HTMLElement> document.querySelector("div#step3"), true)
+        toggleStep(<HTMLElement> document.querySelector("div#step4"), true)
     }
 
     const controls = document.createElement("div")
@@ -269,8 +292,7 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
     button.onclick = () => {
         button.disabled = true
         const result = findPolygons(+numColors.input.value, +kMeansIterations.input.value) // , +polyAccuracy.input.value)
-        appState.colorPolygons = result.polygons
-        appState.colors = result.colors
+        appState.polygonsResults = { colorPolygons: result.polygons, colors: result.colors }
         polygonsChanged()
         button.disabled = false
         // const imageUrl = Lib.matToDataURL(appState.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
@@ -349,41 +371,42 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
 }
 
 function getCenter(): L.LatLng {
-    // const x0 = appState.correspondence[2][0]
-    // const y0 = appState.correspondence[2][1]
-
-    // const x1 = appState.correspondence[0][0] * appState.originalImg.cols +
-    //     appState.correspondence[1][0] * appState.originalImg.rows +
-    //     appState.correspondence[2][0] * 1
-
-    // const y1 = appState.correspondence[0][1] * appState.originalImg.cols +
-    //     appState.correspondence[1][1] * appState.originalImg.rows +
-    //     appState.correspondence[2][1] * 1
-
-    // return [(x0 + x1) / 2, (y0 + y1) / 2]
+    if (appState.uploadResults == null) {
+        throw new Error("Cannot get center because originalImg not set")
+    }
 
     const p0 = pixelToLatLng(L.latLng(0, 0))
-    const p1 = pixelToLatLng(L.latLng(appState.originalImg.cols, appState.originalImg.rows))
+    const img = appState.uploadResults.originalImg
+    const p1 = pixelToLatLng(L.latLng(img.cols, img.rows))
     return L.latLng((p0.lat + p1.lat) / 2, (p0.lng + p1.lng) / 2)
 }
 
 function pixelToLatLng(pixel: L.LatLng) {
-    const lat = appState.correspondence[0][0] * pixel.lat +
-        appState.correspondence[1][0] * pixel.lng +
-        appState.correspondence[2][0] * 1
+    if (appState.correspondenceResults.correspondence == null) {
+        throw new Error("Cannot do conversion because correspondence not set")
+    }
+    const corr = appState.correspondenceResults.correspondence
+    const lat =
+        corr[0][0] * pixel.lat +
+        corr[1][0] * pixel.lng +
+        corr[2][0] * 1
 
-    const lng = appState.correspondence[0][1] * pixel.lat +
-        appState.correspondence[1][1] * pixel.lng +
-        appState.correspondence[2][1] * 1
+    const lng =
+        corr[0][1] * pixel.lat +
+        corr[1][1] * pixel.lng +
+        corr[2][1] * 1
     return L.latLng(lat, lng)
 }
 
 function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polygon,
                        div: HTMLDivElement) {
+    if (appState.polygonsResults == null) {
+        throw new Error("polygonsResults is null, renderPolygon should not have been called")
+    }
     div.classList.add("polygon-list-element")
 
     const colorPreview = document.createElement("div")
-    const color = appState.colors[colorIndex]
+    const color = appState.polygonsResults.colors[colorIndex]
     colorPreview.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`
     colorPreview.classList.add("color-preview")
 
@@ -404,21 +427,32 @@ function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polyg
     console.log(leafletPoly)
     div.onmouseenter = () => {
         console.log("mouse entered")
+        if (appRefs.polygonsMap == null) {
+            throw new Error("somehow this polygon list element exists but polygonsMap does not")
+        }
         appRefs.polygonsMap.addLayer(leafletPoly)
     }
-    div.onmouseleave = () => appRefs.polygonsMap.removeLayer(leafletPoly)
+    div.onmouseleave = () => {
+        if (appRefs.polygonsMap == null) {
+            throw new Error("somehow this polygon list element exists but polygonsMap does not")
+        }
+        appRefs.polygonsMap.removeLayer(leafletPoly)
+    }
 
     div.appendChild(colorPreview)
     div.appendChild(title)
 }
 
 function polygonsChanged() {
+    if (appState.polygonsResults === null) {
+        throw new Error("Polygons results doesn't exist")
+    }
     const polygonsList = document.querySelector("div#polygons-list")
-    for (const ix in appState.colorPolygons) {
-        const poly = appState.colorPolygons[ix]
+    for (const ix in appState.polygonsResults.colorPolygons) {
+        const poly = appState.polygonsResults.colorPolygons[ix]
         const listElement = document.createElement("div")
         renderPolygon(poly.colorIndex, ix, poly.polygon, listElement)
-        polygonsList.appendChild(listElement)
+        polygonsList!.appendChild(listElement)
     }
 }
 
@@ -443,18 +477,19 @@ async function setupStorageStep() {
         // TODO if unsaved changes, maybe we should give a popup saying you've changed your file, do you want to save your changes?
         // Can do this by adding a dirty bit to appState
         const selectedFilename = select.options[select.selectedIndex].value
-        if (selectedFilename != appState.name) {
+        if (appState.uploadResults == null || selectedFilename != appState.uploadResults.name) {
             console.log("loading other file. May be discarding work in progress, who knows??")
 
-            function deserializeIfNotNull(m: Lib.SerializedMat): cv.Mat {
+            function deserializeIfNotNull(m: Lib.SerializedMat | null): cv.Mat | null {
                 if (m === null) return null
                 return Lib.deserializeMat(m)
             }
 
-            function deserializeMarkerMap<T>(m: Map<T, L.LatLng>) {
+            function deserializeMarkerMap<T>(m: Map<T, L.LatLng> | null) {
+                if (m == null) return new Map()
                 const newMap = new Map<T, L.Marker>()
                 for (const ix of m.keys()) {
-                    newMap.set(ix, L.marker(m.get(ix)))
+                    newMap.set(ix, L.marker(m.get(ix)!))
                 }
                 return newMap
             }
@@ -463,17 +498,25 @@ async function setupStorageStep() {
             const savedState = results[0]
 
             appState = {
-                name: selectedFilename,
-                originalImg: deserializeIfNotNull(savedState.originalImg),
-                scaledDown: deserializeIfNotNull(savedState.scaledDown),
-                maskedImage: deserializeIfNotNull(savedState.maskedImage),
-                smallerMaskedImage: deserializeIfNotNull(savedState.smallerMaskedImage),
-                userInputCorrespondence: savedState.correspondence !== null,
-                correspondence: savedState.correspondence,
-                leafletMarkers: deserializeMarkerMap(savedState.leafletMarkers),
-                konvaMarkers: deserializeMarkerMap(savedState.konvaMarkers),
-                colors: savedState.colors,
-                colorPolygons: savedState.colorPolygons,
+                uploadResults: {
+                    name: selectedFilename,
+                    originalImg: Lib.deserializeMat(savedState.originalImg),
+                },
+                segmentationResults: savedState.scaledDown && savedState.maskedImage && savedState.smallerMaskedImage ? {
+                    scaledDown: Lib.deserializeMat(savedState.scaledDown),
+                    maskedImage: Lib.deserializeMat(savedState.maskedImage),
+                    smallerMaskedImage: Lib.deserializeMat(savedState.smallerMaskedImage),
+                } : null,
+                correspondenceResults: {
+                    userInputCorrespondence: savedState.correspondence !== null,
+                    correspondence: savedState.correspondence,
+                    mapMarkers: deserializeMarkerMap(savedState.leafletMarkers),
+                    imgMarkers: deserializeMarkerMap(savedState.konvaMarkers),
+                },
+                polygonsResults: savedState.colors && savedState.colorPolygons ? {
+                    colors: savedState.colors,
+                    colorPolygons: savedState.colorPolygons,
+                } : null
             }
 
             console.log(appState)
@@ -485,45 +528,49 @@ async function setupStorageStep() {
 
     const button = <HTMLButtonElement> document.querySelector("button#save")
     button.onclick = async () => {
-        if (appState.name) {
-            const existingFilename = await db.mapFilenames.where({filename: appState.name}).toArray()
+        if (appState.uploadResults) {
+            const existingFilename = await db.mapFilenames.where({filename: appState.uploadResults.name}).toArray()
             let mapsPrimaryKey: number
 
-            function serializeIfNotNull(m: cv.Mat): Lib.SerializedMat {
+            function serializeIfNotNull(m: cv.Mat | null): Lib.SerializedMat | null {
                 if (m === null) return null
                 return Lib.serializeMat(m)
             }
 
-            function serializeMarkerMap<T>(m: Map<T, L.Marker>) {
+            function serializeMarkerMap<T>(m: Map<T, L.Marker> | null) {
+                if (m == null) return null
                 const newMap = new Map<T, L.LatLng>()
                 for (const ix of m.keys()) {
-                    newMap.set(ix, m.get(ix).getLatLng())
+                    newMap.set(ix, m.get(ix)!.getLatLng())
                 }
                 return newMap
             }
 
             const storedState: IStoredAppState = {
-                filename: appState.name,
-                originalImg: serializeIfNotNull(appState.originalImg),
-                scaledDown: serializeIfNotNull(appState.scaledDown),
-                maskedImage: serializeIfNotNull(appState.maskedImage),
-                smallerMaskedImage: serializeIfNotNull(appState.smallerMaskedImage),
-                correspondence: appState.correspondence,
-                leafletMarkers: serializeMarkerMap(appState.leafletMarkers),
-                konvaMarkers: serializeMarkerMap(appState.konvaMarkers),
-                colors: appState.colors,
-                colorPolygons: appState.colorPolygons,
+                filename: appState.uploadResults.name,
+                originalImg: Lib.serializeMat(appState.uploadResults.originalImg),
+                scaledDown: appState.segmentationResults ?
+                    serializeIfNotNull(appState.segmentationResults.scaledDown) : null,
+                maskedImage: appState.segmentationResults ?
+                    serializeIfNotNull(appState.segmentationResults.maskedImage) : null,
+                smallerMaskedImage: appState.segmentationResults ?
+                    serializeIfNotNull(appState.segmentationResults.smallerMaskedImage) : null,
+                correspondence: appState.correspondenceResults.correspondence,
+                leafletMarkers: serializeMarkerMap(appState.correspondenceResults.mapMarkers),
+                konvaMarkers: serializeMarkerMap(appState.correspondenceResults.imgMarkers),
+                colors: appState.polygonsResults ? appState.polygonsResults.colors : null,
+                colorPolygons: appState.polygonsResults ? appState.polygonsResults.colorPolygons : null,
             }
 
             if (existingFilename.length == 0) {
-                db.mapFilenames.add({filename: appState.name})
+                db.mapFilenames.add({filename: appState.uploadResults.name})
                 await db.maps.add(storedState)
                 console.log("added new record in db")
             } else {
                 // it should be in the database
-                const names = await db.maps.where({filename: appState.name}).toArray()
+                const names = await db.maps.where({filename: appState.uploadResults.name}).toArray()
                 const pk = names[0].id
-                await db.maps.update(pk, storedState)
+                await db.maps.update(pk!, storedState)
                 console.log("updated record in db")
             }
         } else {
@@ -534,15 +581,15 @@ async function setupStorageStep() {
 
 function main() {
     setupStorageStep()
-    makeUploadStep(document.querySelector("div#step1"))
-    makeSegmentationStep(document.querySelector("div#step2"))
-    makeCorrespondenceMap(document.querySelector("div#step3"))
-    makePolygonSelector(document.querySelector("div#step4"))
+    makeUploadStep(<HTMLDivElement> document.querySelector("div#step1"))
+    makeSegmentationStep(<HTMLDivElement> document.querySelector("div#step2"))
+    makeCorrespondenceMap(<HTMLDivElement> document.querySelector("div#step3"))
+    makePolygonSelector(<HTMLDivElement> document.querySelector("div#step4"))
 
     // Disable steps 2, 3, and 4 initially
-    toggleStep(document.querySelector("div#step2"), false)
-    toggleStep(document.querySelector("div#step3"), false)
-    toggleStep(document.querySelector("div#step4"), false)
+    toggleStep(<HTMLDivElement> document.querySelector("div#step2"), false)
+    toggleStep(<HTMLDivElement> document.querySelector("div#step3"), false)
+    toggleStep(<HTMLDivElement> document.querySelector("div#step4"), false)
 
     const main = <HTMLElement> document.querySelector("div#main")
     const hiddenCanvas = document.createElement("canvas")
@@ -553,7 +600,7 @@ function main() {
 
 // TODO should be able to pass a cv.Shape type here instead of the actual mat
 function setupCorrespondenceImgMap(imageUrl: string, mat: cv.Mat) {
-    const fabricDiv = document.querySelector("div#leaflet-img-container")
+    const fabricDiv = document.querySelector("div#leaflet-img-container")!
 
     const imgMapEl = document.createElement("div")
     imgMapEl.id = "img-map"
@@ -589,13 +636,13 @@ function setupCorrespondenceImgMap(imageUrl: string, mat: cv.Mat) {
             // Don't go to top of page
             e.preventDefault()
 
-            if (appState.konvaMarkers.has(i)) {
+            if (appState.correspondenceResults.imgMarkers.has(i)) {
                 // TODO This is ratchet, don't use alert.
                 alert("Marker " + i + " already dropped")
             } else {
                 // TODO Make the marker show the marker index
                 const marker = L.marker(imgMap.getCenter(), { draggable: true }).addTo(imgMap)
-                appState.konvaMarkers.set(i, marker)
+                appState.correspondenceResults.imgMarkers.set(i, marker)
                 marker.on("moveend", recomputeCorrespondence)
             }
         }
@@ -606,7 +653,10 @@ function setupCorrespondenceImgMap(imageUrl: string, mat: cv.Mat) {
 
 function segmentationStep(maxComputeDimension: number, saturationThreshold: number,
                           distanceToHighSaturation: number) {
-    const img = appState.originalImg
+    if (appState.uploadResults === null) {
+        throw new Error("Upload results is null, cannot do segmentation step")
+    }
+    const img = appState.uploadResults.originalImg
 
     const ratio = Math.max(img.rows / maxComputeDimension, img.cols / maxComputeDimension)
 
@@ -617,20 +667,21 @@ function segmentationStep(maxComputeDimension: number, saturationThreshold: numb
     const {maskedImage, smallerMaskedImage} = Lib.largestSaturatedPart(img, scaledDown, saturationThreshold, distanceToHighSaturation)
     console.log("Done finding saturated part!")
 
-    appState.scaledDown = scaledDown
-
-    appState.maskedImage = maskedImage
-    appState.smallerMaskedImage = smallerMaskedImage
+    appState.segmentationResults = { scaledDown, maskedImage, smallerMaskedImage }
 }
 
 function findPolygons(numColors: number, kMeansIterations: number):
     {colors: Array<[number,number,number]>,
     polygons: {colorIndex: number, polygon: GeoJSON.Polygon}[]} {
+    if (appState.segmentationResults === null) {
+        throw new Error("Segmentation results is null, cannot find polygons")
+    }
     // Do k-means to get the colors from the scaledDown image.
     // (We use the smaller image because it's faster.)
-    const centers = Lib.getColors(appState.smallerMaskedImage, numColors, kMeansIterations)
+    const centers = Lib.getColors(appState.segmentationResults.smallerMaskedImage,
+                                  numColors, kMeansIterations)
 
-    const {labeledByColorIndex: largeImageColor, labeledRGB: largeImageQuantized} = Lib.labelImageByColors(appState.maskedImage, centers)
+    const {labeledByColorIndex: largeImageColor, labeledRGB: largeImageQuantized} = Lib.labelImageByColors(appState.segmentationResults.maskedImage, centers)
 
     // console.log("Histogram of colors in image:")
     const hist = Lib.imageHist(largeImageColor, numColors)
@@ -720,13 +771,13 @@ function makeCorrespondenceMap(wrapper: HTMLDivElement) {
             // Don't go to top of page
             e.preventDefault()
 
-            if (appState.leafletMarkers.has(i)) {
+            if (appState.correspondenceResults.mapMarkers.has(i)) {
                 // TODO This is ratchet, don't use alert.
                 alert("Marker " + i + " already dropped")
             } else {
                 // TODO Make the marker show the marker index
                 const marker = L.marker(map.getCenter(), { draggable: true }).addTo(map)
-                appState.leafletMarkers.set(i, marker)
+                appState.correspondenceResults.mapMarkers.set(i, marker)
                 marker.on("moveend", recomputeCorrespondence)
             }
         }
@@ -741,12 +792,12 @@ function makeCorrespondenceMap(wrapper: HTMLDivElement) {
             && val[0].length == 2
             && val[1].length == 2
             && val[2].length == 2) {
-            appState.correspondence = val
-            appState.userInputCorrespondence = true
+            appState.correspondenceResults.correspondence = val
+            appState.correspondenceResults.userInputCorrespondence = true
             matrixOutput.innerHTML = "Using inputted transformation: " + val
             correspondenceChanged()
         } else {
-            appState.userInputCorrespondence = false
+            appState.correspondenceResults.userInputCorrespondence = false
             console.log("Found", val, "not expected form of array")
             matrixOutput.outerHTML = "Found " +  val + ", which is not in expected form"
         }
@@ -763,21 +814,21 @@ function makeCorrespondenceMap(wrapper: HTMLDivElement) {
 }
 
 function recomputeCorrespondence() {
-    if (!appState.userInputCorrespondence) {
+    if (!appState.correspondenceResults.userInputCorrespondence) {
         const pairs = new Array<[L.LatLng, L.LatLng]>()
-        for (let entry of appState.konvaMarkers) {
-            if (appState.leafletMarkers.has(entry[0])) {
+        for (let entry of appState.correspondenceResults.imgMarkers) {
+            if (appState.correspondenceResults.mapMarkers.has(entry[0])) {
                 const imgLL = entry[1].getLatLng()
-                const trueLL = appState.leafletMarkers.get(entry[0]).getLatLng()
+                const trueLL = appState.correspondenceResults.mapMarkers.get(entry[0])!.getLatLng()
                 pairs.push([L.latLng(imgLL.lat, imgLL.lng),
                             L.latLng(trueLL.lat, trueLL.lng)])
             }
         }
 
-        const matrixOutput = document.querySelector("p#correspondences-output")
+        const matrixOutput = document.querySelector("p#correspondences-output")!
         if (pairs.length > 1) {
             const correspondence = Lib.regressLatLong(pairs)
-            appState.correspondence = correspondence
+            appState.correspondenceResults.correspondence = correspondence
             matrixOutput.innerHTML = "Found correspondence: " + JSON.stringify(correspondence)
             console.log("Found correspondence", correspondence)
             correspondenceChanged()
@@ -789,6 +840,9 @@ function recomputeCorrespondence() {
 }
 
 function correspondenceChanged() {
+    if (appRefs.polygonsMap == null) {
+        throw new Error("polygonsMap is null")
+    }
     appRefs.polygonsMap.setView(getCenter(), 13)
 }
 
