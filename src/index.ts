@@ -96,6 +96,15 @@ function backupState() {
 
 }
 
+function updateEnabledSteps() {
+    toggleStep(<HTMLDivElement> document.querySelector("div#step2"),
+               appState.uploadResults != null)
+    toggleStep(<HTMLDivElement> document.querySelector("div#step3"),
+               appState.segmentationResults != null)
+    toggleStep(<HTMLDivElement> document.querySelector("div#step4"),
+               appState.correspondenceResults.correspondence != null)
+}
+
 function makeUploadStep(wrapper: HTMLDivElement) {
     async function fileChanged(e: Event) {
         console.log("in fileChanged")
@@ -131,9 +140,8 @@ function makeUploadStep(wrapper: HTMLDivElement) {
 
         setupCorrespondenceImgMap(imageUrl, mat3)
 
-
         // Unblock step 2
-        toggleStep(<HTMLElement> document.querySelector("div#step2"), true)
+        updateEnabledSteps()
 
         // make this saveable
         const newFileOption = <HTMLOptionElement> document.querySelector("option#new-file-option")
@@ -248,8 +256,7 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
         button.disabled = false
         const imageUrl = Lib.matToDataURL(appState.segmentationResults.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
         preview.src = imageUrl
-        toggleStep(<HTMLElement> document.querySelector("div#step3"), true)
-        toggleStep(<HTMLElement> document.querySelector("div#step4"), true)
+        updateEnabledSteps()
     }
 
     const controls = document.createElement("div")
@@ -282,8 +289,6 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
                                          Lib.defaultNumColors)
     const kMeansIterations = makeNumberInput("kMeansIterations", "K-means iterations",
                                          Lib.defaultKMeansIterations)
-    // const polyAccuracy = makeNumberInput("polyAccuracy", "Poly accuracy",
-    //                                      Lib.defaultParams.polyAccuracy)
 
     const button = document.createElement("button")
     button.type = "button"
@@ -295,10 +300,6 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
         appState.polygonsResults = { colorPolygons: result.polygons, colors: result.colors }
         polygonsChanged()
         button.disabled = false
-        // const imageUrl = Lib.matToDataURL(appState.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
-        // preview.src = imageUrl
-        // toggleStep(document.querySelector("div#step3"), true)
-        // toggleStep(document.querySelector("div#step4"), true)
     }
 
 
@@ -587,9 +588,7 @@ function main() {
     makePolygonSelector(<HTMLDivElement> document.querySelector("div#step4"))
 
     // Disable steps 2, 3, and 4 initially
-    toggleStep(<HTMLDivElement> document.querySelector("div#step2"), false)
-    toggleStep(<HTMLDivElement> document.querySelector("div#step3"), false)
-    toggleStep(<HTMLDivElement> document.querySelector("div#step4"), false)
+    updateEnabledSteps()
 
     const main = <HTMLElement> document.querySelector("div#main")
     const hiddenCanvas = document.createElement("canvas")
