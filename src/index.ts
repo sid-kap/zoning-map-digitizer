@@ -34,6 +34,7 @@ interface IStoredAppState {
     id?: number,
     filename: string,
     originalImg: Lib.SerializedMat,
+    originalImgURL: string,
     scaledDown:  Lib.SerializedMat | null,
     maskedImage: Lib.SerializedMat | null,
     smallerMaskedImage: Lib.SerializedMat | null,
@@ -52,7 +53,8 @@ interface IFilename {
 type State = {
     uploadResults: {
         name: string,
-        originalImg: cv.Mat
+        originalImg: cv.Mat,
+        originalImgURL: string,
     } | null,
     segmentationResults: {
         scaledDown: cv.Mat,
@@ -90,8 +92,6 @@ const appRefs = {
 const db = new MyAppDatabase()
 main()
 
-let paramsValue: Lib.Params = Lib.defaultParams
-
 function backupState() {
 
 }
@@ -103,6 +103,106 @@ function updateEnabledSteps() {
                appState.segmentationResults != null)
     toggleStep(<HTMLDivElement> document.querySelector("div#step4"),
                appState.correspondenceResults.correspondence != null)
+}
+
+function uploadResultsChanged() {
+    let img = <HTMLImageElement> document.querySelector("img#original-preview")
+
+    const fabricDiv = document.querySelector("div#leaflet-img-container")!
+    fabricDiv.innerHTML = ""
+
+    if (appState.uploadResults == null) {
+        img.removeAttribute("src")
+    } else {
+        img.src = appState.uploadResults.originalImgURL
+
+        const mat = appState.uploadResults.originalImg
+
+        const imgMapEl = <HTMLDivElement> document.createElement("div")
+        imgMapEl.id = "img-map"
+        imgMapEl.innerHTML = ""
+        fabricDiv.appendChild(imgMapEl)
+
+        const imgMap = new L.Map("img-map", {
+            crs: L.CRS.Simple,
+            minZoom: -10,
+            maxZoom: 10,
+            center: [mat.cols / 2, mat.rows / 2],
+            zoom: 1,
+        })
+
+        const bounds = L.latLngBounds(L.latLng(0, 0), L.latLng(mat.rows, mat.cols))
+
+        for (let i = 0; i < 4; i++) {
+            const link = document.createElement("a")
+
+            // TODO add CSS for this class so that the link doesn't turn purple after clicking
+            link.classList.add("drop-marker-link")
+
+            link.href = "#"
+            link.innerHTML = "Drop marker " + i
+            link.onclick = e => {
+                // Don't go to top of page
+                e.preventDefault()
+
+                if (appState.correspondenceResults.imgMarkers.has(i)) {
+                    // TODO This is ratchet, don't use alert.
+                    alert("Marker " + i + " already dropped")
+                } else {
+                    // TODO Make the marker show the marker index
+                    const marker = L.marker(imgMap.getCenter(), { draggable: true }).addTo(imgMap)
+                    appState.correspondenceResults.imgMarkers.set(i, marker)
+                    marker.on("moveend", recomputeCorrespondence)
+                }
+            }
+            fabricDiv.appendChild(link)
+            fabricDiv.appendChild(document.createElement("br"))
+        }
+
+        const imgOverlay = L.imageOverlay(appState.uploadResults.originalImgURL, bounds).addTo(imgMap)
+    }
+}
+
+function segmentationResultsChanged() {
+    const preview = <HTMLImageElement> document.createElement("img")
+
+    if (appState.segmentationResults == null) {
+        preview.removeAttribute("src")
+    } else {
+        const imageUrl = Lib.matToDataURL(appState.segmentationResults.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
+
+        preview.src = imageUrl
+    }
+}
+
+function correspondenceResultsChanged() {
+    if (appRefs.polygonsMap == null) {
+        throw new Error("polygonsMap is null")
+    }
+
+    if (appState.correspondenceResults) {
+        appRefs.polygonsMap.setView(getCenter(), 13)
+    } else {
+        // default location
+        appRefs.polygonsMap.setView([37.773972, -122.431297], 13)
+    }
+}
+
+function polygonsResultsChanged() {
+    const polygonsList = document.querySelector("div#polygons-list")!
+    // Remove all children
+    polygonsList.innerHTML = ""
+
+    if (appState.polygonsResults === null) {
+        //
+    } else {
+        for (const ix in appState.polygonsResults.colorPolygons) {
+            const poly = appState.polygonsResults.colorPolygons[ix]
+            const listElement = document.createElement("div")
+            renderPolygon(poly.colorIndex, ix, poly.polygon, listElement)
+            polygonsList.appendChild(listElement)
+        }
+    }
 }
 
 function makeUploadStep(wrapper: HTMLDivElement) {
@@ -131,22 +231,17 @@ function makeUploadStep(wrapper: HTMLDivElement) {
         cv.cvtColor(mat, mat3, cv.COLOR_RGBA2RGB)
         mat.delete()
 
-        appState.uploadResults = { name: file.name, originalImg: mat3 }
+        appState.uploadResults = { name: file.name, originalImg: mat3, originalImgURL: imageUrl }
         console.log("got mat")
         loader.style.display = "none"
-
-        let img = <HTMLImageElement> document.querySelector("img#original-preview")
-        img.src = imageUrl
-
-        setupCorrespondenceImgMap(imageUrl, mat3)
-
-        // Unblock step 2
-        updateEnabledSteps()
 
         // make this saveable
         const newFileOption = <HTMLOptionElement> document.querySelector("option#new-file-option")
         newFileOption.value = appState.uploadResults.name
         newFileOption.innerHTML = appState.uploadResults.name + " (new file)"
+
+        uploadResultsChanged()
+        updateEnabledSteps()
     }
 
     wrapper.style.maxWidth = "70em"
@@ -254,8 +349,7 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
             throw new Error("this is impossible, segmentationStep sets the segementation results")
         }
         button.disabled = false
-        const imageUrl = Lib.matToDataURL(appState.segmentationResults.maskedImage, <HTMLCanvasElement> document.querySelector("canvas#pdfConversion"))
-        preview.src = imageUrl
+        segmentationResultsChanged()
         updateEnabledSteps()
     }
 
@@ -298,8 +392,9 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
         button.disabled = true
         const result = findPolygons(+numColors.input.value, +kMeansIterations.input.value) // , +polyAccuracy.input.value)
         appState.polygonsResults = { colorPolygons: result.polygons, colors: result.colors }
-        polygonsChanged()
         button.disabled = false
+        polygonsResultsChanged()
+        updateEnabledSteps()
     }
 
 
@@ -444,19 +539,6 @@ function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polyg
     div.appendChild(title)
 }
 
-function polygonsChanged() {
-    if (appState.polygonsResults === null) {
-        throw new Error("Polygons results doesn't exist")
-    }
-    const polygonsList = document.querySelector("div#polygons-list")
-    for (const ix in appState.polygonsResults.colorPolygons) {
-        const poly = appState.polygonsResults.colorPolygons[ix]
-        const listElement = document.createElement("div")
-        renderPolygon(poly.colorIndex, ix, poly.polygon, listElement)
-        polygonsList!.appendChild(listElement)
-    }
-}
-
 async function setupStorageStep() {
     const defaultOption = document.createElement("option")
     defaultOption.innerHTML = "New file"
@@ -502,6 +584,7 @@ async function setupStorageStep() {
                 uploadResults: {
                     name: selectedFilename,
                     originalImg: Lib.deserializeMat(savedState.originalImg),
+                    originalImgURL: savedState.originalImgURL,
                 },
                 segmentationResults: savedState.scaledDown && savedState.maskedImage && savedState.smallerMaskedImage ? {
                     scaledDown: Lib.deserializeMat(savedState.scaledDown),
@@ -522,8 +605,12 @@ async function setupStorageStep() {
 
             console.log(appState)
 
-            // TODO need to reflect app state in the HTML elements! Here is where purity
-            // and React/Redux would have come in handy...
+            uploadResultsChanged()
+            segmentationResultsChanged()
+            correspondenceResultsChanged()
+            polygonsResultsChanged()
+
+            updateEnabledSteps()
         }
     }
 
@@ -550,6 +637,7 @@ async function setupStorageStep() {
             const storedState: IStoredAppState = {
                 filename: appState.uploadResults.name,
                 originalImg: Lib.serializeMat(appState.uploadResults.originalImg),
+                originalImgURL: appState.uploadResults.originalImgURL,
                 scaledDown: appState.segmentationResults ?
                     serializeIfNotNull(appState.segmentationResults.scaledDown) : null,
                 maskedImage: appState.segmentationResults ?
@@ -595,59 +683,6 @@ function main() {
     hiddenCanvas.style.display = "none"
     hiddenCanvas.id = "pdfConversion"
     main.appendChild(hiddenCanvas)
-}
-
-// TODO should be able to pass a cv.Shape type here instead of the actual mat
-function setupCorrespondenceImgMap(imageUrl: string, mat: cv.Mat) {
-    const fabricDiv = document.querySelector("div#leaflet-img-container")!
-
-    const imgMapEl = document.createElement("div")
-    imgMapEl.id = "img-map"
-    imgMapEl.style.height = "400px"
-    fabricDiv.appendChild(imgMapEl)
-
-    const zoomFactor = 1 / 8
-    // const zoomedCRS = L.Util.extend(L.CRS.Simple, {
-    //     transformation: new L.Transformation(zoomFactor, 0, -zoomFactor, 0),
-    // })
-
-    const imgMap = new L.Map("img-map", {
-        crs: L.CRS.Simple,
-        // crs: zoomedCRS,
-        minZoom: -10,
-        maxZoom: 10,
-        center: [mat.cols / 2, mat.rows / 2],
-        zoom: 1,
-    })
-
-    const bounds = L.latLngBounds(L.latLng(0, 0), L.latLng(mat.rows, mat.cols))
-    const imgOverlay = L.imageOverlay(imageUrl, bounds).addTo(imgMap)
-
-    for (let i = 0; i < 4; i++) {
-        const link = document.createElement("a")
-
-        // TODO add CSS for this class so that the link doesn't turn purple after clicking
-        link.classList.add("drop-marker-link")
-
-        link.href = "#"
-        link.innerHTML = "Drop marker " + i
-        link.onclick = e => {
-            // Don't go to top of page
-            e.preventDefault()
-
-            if (appState.correspondenceResults.imgMarkers.has(i)) {
-                // TODO This is ratchet, don't use alert.
-                alert("Marker " + i + " already dropped")
-            } else {
-                // TODO Make the marker show the marker index
-                const marker = L.marker(imgMap.getCenter(), { draggable: true }).addTo(imgMap)
-                appState.correspondenceResults.imgMarkers.set(i, marker)
-                marker.on("moveend", recomputeCorrespondence)
-            }
-        }
-        fabricDiv.appendChild(link)
-        fabricDiv.appendChild(document.createElement("br"))
-    }
 }
 
 function segmentationStep(maxComputeDimension: number, saturationThreshold: number,
@@ -794,7 +829,7 @@ function makeCorrespondenceMap(wrapper: HTMLDivElement) {
             appState.correspondenceResults.correspondence = val
             appState.correspondenceResults.userInputCorrespondence = true
             matrixOutput.innerHTML = "Using inputted transformation: " + val
-            correspondenceChanged()
+            correspondenceResultsChanged()
         } else {
             appState.correspondenceResults.userInputCorrespondence = false
             console.log("Found", val, "not expected form of array")
@@ -830,19 +865,13 @@ function recomputeCorrespondence() {
             appState.correspondenceResults.correspondence = correspondence
             matrixOutput.innerHTML = "Found correspondence: " + JSON.stringify(correspondence)
             console.log("Found correspondence", correspondence)
-            correspondenceChanged()
+            correspondenceResultsChanged()
+            updateEnabledSteps()
         } else {
             console.log("Tried to recompute but not enough points")
             matrixOutput.innerHTML = "Tried to recompute but not enough points"
         }
     }
-}
-
-function correspondenceChanged() {
-    if (appRefs.polygonsMap == null) {
-        throw new Error("polygonsMap is null")
-    }
-    appRefs.polygonsMap.setView(getCenter(), 13)
 }
 
 function toggleStep(div: HTMLElement, enable: boolean) {

@@ -80,6 +80,10 @@ div#main {
         div#leaflet-img-container {
             grid-row: 2;
             grid-column: 1 / 2;
+
+            div#img-map {
+                height: 400px;
+            }
         }
         div#leaflet-map-container {
             grid-row: 2;
