@@ -23,7 +23,17 @@ export type SerializedMat = {
     rows: number,
     cols: number,
     type: cv.MatType,
-    data: ArrayBuffer
+    data: Uint8Array,
+}
+
+export function serializeMat(mat: cv.Mat): SerializedMat {
+    return {rows: mat.rows, cols: mat.cols, type: mat.type(), data: mat.data}
+}
+
+export function deserializeMat(smat: SerializedMat): cv.Mat {
+    const mat = new cv.Mat(smat.rows, smat.cols, smat.type)
+    mat.data.set(smat.data)
+    return mat
 }
 
 // TODO should take a canvas to work in as an argument

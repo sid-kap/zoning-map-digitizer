@@ -12,7 +12,7 @@ ctx.addEventListener("message", processEvent);
 function processEvent(event: any): Array<Lib.SerializedMat> {
     const serializedMat: Lib.SerializedMat = event.data.serializedImg
     const mat = cv.matFromArray(serializedMat.rows, serializedMat.cols,
-                                serializedMat.type, serializedMat.data)
+                                serializedMat.type, serializedMat.data.buffer)
 
     console.log(`getColorPolygons started for color ${event.data.colorIndex}`)
     const res = Lib.getColorPolygons(mat, event.data.colorIndex)
@@ -20,7 +20,7 @@ function processEvent(event: any): Array<Lib.SerializedMat> {
     const ret = new Array<Lib.SerializedMat>()
     for (let ix in res) {
         const m = res[ix]
-        ret.push({rows: m.rows, cols: m.cols, type: m.type(), data: m.data.buffer})
+        ret.push({rows: m.rows, cols: m.cols, type: m.type(), data: m.data})
     }
     return ret
 }

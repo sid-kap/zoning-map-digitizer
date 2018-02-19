@@ -7,10 +7,50 @@ import * as cv from "opencv.js"
 import * as L from "leaflet"
 import * as tinycolor from "tinycolor2"
 const GeoSearch = require("leaflet-geosearch")
+import Dexie from "dexie"
 
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
 
+class MyAppDatabase extends Dexie {
+    maps: Dexie.Table<IStoredAppState, number> // number = type of the primkey
+
+    // Stores only the filenames for the dropdown, then you can use the filename to
+    // get the actual record from the `maps` table.
+    // (The benefit of having two separate tables is that now  you can get all the
+    // filenames without loading the whole record into memory, which would be quite
+    // large/memory-intensive.)
+    mapFilenames: Dexie.Table<IFilename, number>
+
+    constructor () {
+        super("MyAppDatabase")
+        this.version(1).stores({
+            maps: '++id, filename, originalImg, scaledDown, maskedImage, smallerMaskedImage, correspondence, leafletMarkers, konvaMarkers, colors, colorPolygons',
+            mapFilenames: '++id, filename'
+        })
+    }
+}
+
+interface IStoredAppState {
+    id?: number,
+    filename: string,
+    originalImg: Lib.SerializedMat,
+    scaledDown:  Lib.SerializedMat,
+    maskedImage: Lib.SerializedMat,
+    smallerMaskedImage: Lib.SerializedMat,
+    correspondence: number[][],
+    leafletMarkers: Map<number, L.LatLng>,
+    konvaMarkers:   Map<number, L.LatLng>,
+    colors: Array<[number,number,number]>,
+    colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[],
+}
+
+interface IFilename {
+    id?: number,
+    filename: string,
+}
+
 let appState = {
+    name: <string> null,
     originalImg: <cv.Mat> null,
     scaledDown: <cv.Mat> null,
     maskedImage: <cv.Mat> null,
@@ -27,9 +67,14 @@ let appRefs = {
     polygonsMap: <L.Map> null,
 }
 
+const db = new MyAppDatabase()
 main()
 
 let paramsValue: Lib.Params = Lib.defaultParams
+
+function backupState() {
+
+}
 
 function makeUploadStep(wrapper: HTMLDivElement) {
     async function fileChanged(e: Event) {
@@ -37,6 +82,7 @@ function makeUploadStep(wrapper: HTMLDivElement) {
         let input = <any> document.querySelector("input[name=file]")
         let fileList: FileList = input.files
         let file: File = fileList[0]
+        appState.name = file.name
         let fileReader = new FileReader()
 
         // document.querySelector("img#original-preview").classList.add("loader")
@@ -68,6 +114,11 @@ function makeUploadStep(wrapper: HTMLDivElement) {
 
         // Unblock step 2
         toggleStep(document.querySelector("div#step2"), true)
+
+        // make this saveable
+        const newFileOption = <HTMLOptionElement> document.querySelector("option#new-file-option")
+        newFileOption.value = appState.name
+        newFileOption.innerHTML = appState.name + " (new file)"
     }
 
     wrapper.style.maxWidth = "70em"
@@ -371,7 +422,118 @@ function polygonsChanged() {
     }
 }
 
+async function setupStorageStep() {
+    const defaultOption = document.createElement("option")
+    defaultOption.innerHTML = "New file"
+    defaultOption.selected = true
+    defaultOption.id = "new-file-option"
+
+    const select = <HTMLSelectElement> document.querySelector("select#load-select")
+    select.appendChild(defaultOption)
+
+    const filenames = await db.mapFilenames.toArray()
+    for (const filename of filenames) {
+        const option = document.createElement("option")
+        option.innerHTML = filename.filename
+        option.value = filename.filename
+        select.appendChild(option)
+    }
+
+    select.onchange = async () => {
+        // TODO if unsaved changes, maybe we should give a popup saying you've changed your file, do you want to save your changes?
+        // Can do this by adding a dirty bit to appState
+        const selectedFilename = select.options[select.selectedIndex].value
+        if (selectedFilename != appState.name) {
+            console.log("loading other file. May be discarding work in progress, who knows??")
+
+            function deserializeIfNotNull(m: Lib.SerializedMat): cv.Mat {
+                if (m === null) return null
+                return Lib.deserializeMat(m)
+            }
+
+            function deserializeMarkerMap<T>(m: Map<T, L.LatLng>) {
+                const newMap = new Map<T, L.Marker>()
+                for (const ix of m.keys()) {
+                    newMap.set(ix, L.marker(m.get(ix)))
+                }
+                return newMap
+            }
+
+            const results = await db.maps.where({filename: selectedFilename}).toArray()
+            const savedState = results[0]
+
+            appState = {
+                name: selectedFilename,
+                originalImg: deserializeIfNotNull(savedState.originalImg),
+                scaledDown: deserializeIfNotNull(savedState.scaledDown),
+                maskedImage: deserializeIfNotNull(savedState.maskedImage),
+                smallerMaskedImage: deserializeIfNotNull(savedState.smallerMaskedImage),
+                userInputCorrespondence: savedState.correspondence !== null,
+                correspondence: savedState.correspondence,
+                leafletMarkers: deserializeMarkerMap(savedState.leafletMarkers),
+                konvaMarkers: deserializeMarkerMap(savedState.konvaMarkers),
+                colors: savedState.colors,
+                colorPolygons: savedState.colorPolygons,
+            }
+
+            console.log(appState)
+
+            // TODO need to reflect app state in the HTML elements! Here is where purity
+            // and React/Redux would have come in handy...
+        }
+    }
+
+    const button = <HTMLButtonElement> document.querySelector("button#save")
+    button.onclick = async () => {
+        if (appState.name) {
+            const existingFilename = await db.mapFilenames.where({filename: appState.name}).toArray()
+            let mapsPrimaryKey: number
+
+            function serializeIfNotNull(m: cv.Mat): Lib.SerializedMat {
+                if (m === null) return null
+                return Lib.serializeMat(m)
+            }
+
+            function serializeMarkerMap<T>(m: Map<T, L.Marker>) {
+                const newMap = new Map<T, L.LatLng>()
+                for (const ix of m.keys()) {
+                    newMap.set(ix, m.get(ix).getLatLng())
+                }
+                return newMap
+            }
+
+            const storedState: IStoredAppState = {
+                filename: appState.name,
+                originalImg: serializeIfNotNull(appState.originalImg),
+                scaledDown: serializeIfNotNull(appState.scaledDown),
+                maskedImage: serializeIfNotNull(appState.maskedImage),
+                smallerMaskedImage: serializeIfNotNull(appState.smallerMaskedImage),
+                correspondence: appState.correspondence,
+                leafletMarkers: serializeMarkerMap(appState.leafletMarkers),
+                konvaMarkers: serializeMarkerMap(appState.konvaMarkers),
+                colors: appState.colors,
+                colorPolygons: appState.colorPolygons,
+            }
+
+            if (existingFilename.length == 0) {
+                db.mapFilenames.add({filename: appState.name})
+                await db.maps.add(storedState)
+                console.log("added new record in db")
+            } else {
+                // it should be in the database
+                const names = await db.maps.where({filename: appState.name}).toArray()
+                const pk = names[0].id
+                await db.maps.update(pk, storedState)
+                console.log("updated record in db")
+            }
+        } else {
+            alert("Cannot save because you haven't uploaded a file!")
+        }
+    }
+}
+
 function main() {
+    setupStorageStep()
     makeUploadStep(document.querySelector("div#step1"))
     makeSegmentationStep(document.querySelector("div#step2"))
     makeCorrespondenceMap(document.querySelector("div#step3"))
