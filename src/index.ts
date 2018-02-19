@@ -297,18 +297,6 @@ function setPropAny<T>(x: T, key: string, val: string) {
     xAny[key] = val
 }
 
-function makeCanvas(id: string): HTMLCanvasElement {
-    const preview = <HTMLCanvasElement> document.createElement("canvas")
-    preview.id = id
-    preview.width = 500
-    preview.height = 500
-    preview.style.width = "500px"
-    preview.style.height = "500px"
-    preview.style.backgroundColor = "#555555"
-
-    return preview
-}
-
 function setGridLoc(el: HTMLElement, gridRow: string, gridColumn: string) {
     setPropAny(el.style, "grid-row", gridRow)
     setPropAny(el.style, "grid-column", gridColumn)
@@ -321,7 +309,7 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
     setPropAny(wrapper.style, "grid-template-columns", "repeat(2, 1fr)")
     setPropAny(wrapper.style, "grid-gap", "10px")
 
-    const preview = <HTMLImageElement> document.createElement("img") // makeCanvas("segmentation-preview")
+    const preview = <HTMLImageElement> document.createElement("img")
     setGridLoc(preview, "2", "2 / 3")
     preview.style.maxWidth = "100%"
     preview.style.maxHeight = "100%"
@@ -390,13 +378,12 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
 
     button.onclick = () => {
         button.disabled = true
-        const result = findPolygons(+numColors.input.value, +kMeansIterations.input.value) // , +polyAccuracy.input.value)
+        const result = findPolygons(+numColors.input.value, +kMeansIterations.input.value)
         appState.polygonsResults = { colorPolygons: result.polygons, colors: result.colors }
         button.disabled = false
         polygonsResultsChanged()
         updateEnabledSteps()
     }
-
 
     wrapper.style.maxWidth = "100em"
 
@@ -406,8 +393,6 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
     controls.appendChild(document.createElement("br"))
     controls.appendChild(kMeansIterations.label)
     controls.appendChild(document.createElement("br"))
-    // wrapper.appendChild(polyAccuracy.label)
-    // wrapper.appendChild(document.createElement("br"))
     controls.appendChild(button)
 
     wrapper.appendChild(controls)
@@ -717,19 +702,10 @@ function findPolygons(numColors: number, kMeansIterations: number):
 
     const {labeledByColorIndex: largeImageColor, labeledRGB: largeImageQuantized} = Lib.labelImageByColors(appState.segmentationResults.maskedImage, centers)
 
-    // console.log("Histogram of colors in image:")
     const hist = Lib.imageHist(largeImageColor, numColors)
-    // console.log(hist)
     const largestColor = hist[0][0]
 
     // const polygons = new cv.MatVector()
-
-    // const serializedImg: Lib.SerializedMat = {
-    //     rows: largeImageColor.rows,
-    //     cols: largeImageColor.cols,
-    //     type: largeImageColor.type(),
-    //     data: largeImageColor.data.buffer
-    // }
 
     const numRows = largeImageColor.rows
     const geojsonPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[] = []
@@ -746,9 +722,9 @@ function findPolygons(numColors: number, kMeansIterations: number):
 
             const polys = Lib.getColorPolygons(largeImageColor, i)
             for (const poly of polys) {
-            //     // TODO also save the color index with it!
-            //     console.log(poly.type())
-            //     polygons.push_back(poly)
+                //     // TODO also save the color index with it!
+                //     console.log(poly.type())
+                //     polygons.push_back(poly)
                 geojsonPolygons.push({colorIndex: i, polygon: Lib.contourToGeoJSON(poly, numRows)})
             }
 
@@ -762,7 +738,6 @@ function findPolygons(numColors: number, kMeansIterations: number):
                      centers.data[3 * i + 2]])
     }
 
-    // console.log("about to draw")
     // negative number means draw all contours
     // cv.drawContours(largeImageQuantized, polygons, -1, [0,0,255,0], 4)
 
