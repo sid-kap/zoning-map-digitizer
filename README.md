@@ -47,14 +47,16 @@ Ultimately it will be served from a web server, but a static server will suffice
 ## TODO:
 - [x] make the algorithm parameters configurable (I made some `<input>` fields, but they don't do anything)
 - [ ] make the blob boundary functions take account of holes inside the polygon
-- [ ] allow uploading PNG (or even other image formats) in addition to PDF. (Would also make testing faster, since PDF rendering is very slow, at least with this library)
+- [ ] allow uploading PNG (or even other image formats) in addition to PDF
 - [ ] show loading animation on segmentation step
+- [ ] show progress bar or something on findPolygons step (preferably, show detailed process like "in KMeans", "Processing color x/25", etc. because it's so slow)
+- [ ] if coordinates loaded from saved state, make the text box properly indicate it's using the backed-up coordinates (in fact, we can probably get rid of the input box at some point since we have app state storage now)
 
 Stuff to speed up the testing/development of program:
-- [ ] Persistent storage (localStorage) of app state, so that you can reload it and not have to re-do steps (or maybe 5-10MB is not enough to store the state??)
+- [x] Persistent storage of app state, so that you can reload it and not have to re-do steps (using IndexedDB)
 - [ ] Download state of app into a file (and be able to restore from state), so that you can go mess with it later
 
 UI stuff:
-- [ ] Sort polygons in decreasing area order (and show the area, in acres or sq mi, in the list)
+- [x] Sort polygons in decreasing area order (and show the area, in acres or sq mi, in the list)
 - [ ] make way to enter in name of zone
 - [ ] make fast way of entering same zone for things of same color
