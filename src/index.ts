@@ -26,9 +26,11 @@ class MyAppDatabase extends Dexie {
 
     constructor () {
         super("MyAppDatabase")
+
+        // Only put the indexed fields here
         this.version(1).stores({
-            maps: '++id, filename, originalImg, maskedImage, smallerMaskedImage, correspondence, leafletMarkers, konvaMarkers, colors, colorPolygons',
-            mapFilenames: '++id, filename'
+            maps: "++id, filename",
+            mapFilenames: "++id, filename"
         })
     }
 }
