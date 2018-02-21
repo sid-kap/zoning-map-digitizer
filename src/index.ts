@@ -8,6 +8,9 @@ import * as L from "leaflet"
 import * as tinycolor from "tinycolor2"
 const GeoSearch = require("leaflet-geosearch")
 import Dexie from "dexie"
+const geojsonArea = require("geojson-area")
+import turfArea from "@turf/area"
+
 
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
 
@@ -24,7 +27,7 @@ class MyAppDatabase extends Dexie {
     constructor () {
         super("MyAppDatabase")
         this.version(1).stores({
-            maps: '++id, filename, originalImg, scaledDown, maskedImage, smallerMaskedImage, correspondence, leafletMarkers, konvaMarkers, colors, colorPolygons',
+            maps: '++id, filename, originalImg, maskedImage, smallerMaskedImage, correspondence, leafletMarkers, konvaMarkers, colors, colorPolygons',
             mapFilenames: '++id, filename'
         })
     }
@@ -35,14 +38,13 @@ interface IStoredAppState {
     filename: string,
     originalImg: Lib.SerializedMat,
     originalImgURL: string,
-    scaledDown:  Lib.SerializedMat | null,
     maskedImage: Lib.SerializedMat | null,
     smallerMaskedImage: Lib.SerializedMat | null,
     correspondence: number[][] | null,
     leafletMarkers: Map<number, L.LatLng> | null,
     konvaMarkers:   Map<number, L.LatLng> | null,
     colors: Array<[number,number,number]> | null,
-    colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[] | null,
+    colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon, area: number}[] | null,
 }
 
 interface IFilename {
@@ -57,7 +59,6 @@ type State = {
         originalImgURL: string,
     } | null,
     segmentationResults: {
-        // scaledDown: cv.Mat,
         maskedImage: cv.Mat,
         smallerMaskedImage: cv.Mat
     } | null,
@@ -69,7 +70,7 @@ type State = {
     },
     polygonFinderResults: {
         colors: [number, number, number][],
-        colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[]
+        colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon, area: number}[]
     } | null,
     polygonSelectorResults: {
 
@@ -170,7 +171,7 @@ function uploadResultsChanged() {
 }
 
 function segmentationResultsChanged() {
-    const preview = <HTMLImageElement> document.createElement("img")
+    const preview = <HTMLImageElement> document.querySelector("img#segmentation-preview")
 
     if (appState.segmentationResults == null) {
         preview.removeAttribute("src")
@@ -205,7 +206,7 @@ function polygonFinderResultsChanged() {
         for (const ix in appState.polygonFinderResults.colorPolygons) {
             const poly = appState.polygonFinderResults.colorPolygons[ix]
             const listElement = document.createElement("div")
-            renderPolygon(poly.colorIndex, ix, poly.polygon, listElement)
+            renderPolygon(poly.colorIndex, ix, poly.polygon, poly.area, listElement)
             polygonsList.appendChild(listElement)
         }
     }
@@ -319,6 +320,7 @@ function makeSegmentationStep(wrapper: HTMLDivElement) {
     setGridLoc(preview, "2", "2 / 3")
     preview.style.maxWidth = "100%"
     preview.style.maxHeight = "100%"
+    preview.id = "segmentation-preview"
 
     const maxComputeDimension =
         makeNumberInput("maxComputeDimension", "Max image dimension",
@@ -385,7 +387,25 @@ function makePolygonFinder(wrapper: HTMLDivElement) {
     button.onclick = () => {
         button.disabled = true
         const result = findPolygons(+numColors.input.value, +kMeansIterations.input.value)
-        appState.polygonFinderResults = { colorPolygons: result.polygons, colors: result.colors }
+
+        const polysTransformed = new Array<{ polygon: GeoJSON.Polygon, colorIndex: number, area: number }>()
+        for (const o of result.polygons) {
+            // const polyImgCoords = L.GeoJSON.coordsToLatLngs(o.polygon.coordinates, 1)
+            function mapPixel(pixel: [number, number]): number[] {
+                const result = pixelToLatLng(L.GeoJSON.coordsToLatLng(pixel))
+                return L.GeoJSON.latLngToCoords(result)
+            }
+            const polyLatLng: number[][][] = o.polygon.coordinates.map(v => v.map(mapPixel))
+            const transformedPoly: GeoJSON.Polygon = { type: "Polygon", coordinates: polyLatLng }
+            const area = turfArea(transformedPoly)
+            polysTransformed.push({ polygon: transformedPoly, colorIndex: o.colorIndex, area })
+        }
+
+        const sortedPolygons = polysTransformed.sort((a,b) => b.area - a.area)
+        appState.polygonFinderResults = {
+            colorPolygons: sortedPolygons,
+            colors: result.colors
+        }
         button.disabled = false
         polygonFinderResultsChanged()
         updateEnabledSteps()
@@ -488,7 +508,7 @@ function pixelToLatLng(pixel: L.LatLng) {
 }
 
 function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polygon,
-                       div: HTMLDivElement) {
+                       area: number, div: HTMLDivElement) {
     if (appState.polygonFinderResults == null) {
         throw new Error("polygonFinderResults is null, renderPolygon should not have been called")
     }
@@ -501,21 +521,20 @@ function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polyg
 
     const title = document.createElement("div")
     title.classList.add("title")
-    title.innerHTML = "Color index: " + colorIndex
+    title.innerHTML = "Area: " + area + "m²"
 
     div.dataset.polygonIndex = index
 
-    const polyImgCoords = L.GeoJSON.coordsToLatLngs(polygon.coordinates, 1)
-    const polyLatLng = polyImgCoords.map(
-        v => v.map( (point: L.LatLng) => pixelToLatLng(point)))
+    const polyLatLng = L.GeoJSON.coordsToLatLngs(polygon.coordinates, 1)
+    // const polyLatLng = polygon.coordinates.map(
+    //     v => v.map( (point: L.LatLng) => pixelToLatLng(point)))
+    console.log(polyLatLng)
 
     const leafletPoly = L.polygon(polyLatLng,
                                   { color: tinycolor({r: color[0],
                                                       g: color[1],
                                                       b: color[2]}).toHexString() })
-    console.log(leafletPoly)
     div.onmouseenter = () => {
-        console.log("mouse entered")
         if (appRefs.polygonsMap == null) {
             throw new Error("somehow this polygon list element exists but polygonsMap does not")
         }
@@ -524,6 +543,7 @@ function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polyg
     div.onmouseleave = () => {
         if (appRefs.polygonsMap == null) {
             throw new Error("somehow this polygon list element exists but polygonsMap does not")
+
         }
         appRefs.polygonsMap.removeLayer(leafletPoly)
     }
@@ -577,11 +597,9 @@ async function setupStorageStep() {
                 uploadResults: {
                     name: selectedFilename,
                     originalImg: Lib.deserializeMat(savedState.originalImg),
-                    // originalImgURL: savedState.originalImgURL,
-                    originalImgURL: "",
+                    originalImgURL: savedState.originalImgURL,
                 },
-                segmentationResults: savedState.scaledDown && savedState.maskedImage && savedState.smallerMaskedImage ? {
-                    // scaledDown: Lib.deserializeMat(savedState.scaledDown),
+                segmentationResults: savedState.maskedImage && savedState.smallerMaskedImage ? {
                     maskedImage: Lib.deserializeMat(savedState.maskedImage),
                     smallerMaskedImage: Lib.deserializeMat(savedState.smallerMaskedImage),
                 } : null,
@@ -633,9 +651,6 @@ async function setupStorageStep() {
                 filename: appState.uploadResults.name,
                 originalImg: Lib.serializeMat(appState.uploadResults.originalImg),
                 originalImgURL: appState.uploadResults.originalImgURL,
-                scaledDown: null,
-                // scaledDown: appState.segmentationResults ?
-                    // serializeIfNotNull(appState.segmentationResults.scaledDown) : null,
                 maskedImage: appState.segmentationResults ?
                     serializeIfNotNull(appState.segmentationResults.maskedImage) : null,
                 smallerMaskedImage: appState.segmentationResults ?
@@ -709,7 +724,6 @@ function segmentationStep(maxComputeDimension: number, saturationThreshold: numb
     const {maskedImage, smallerMaskedImage} = Lib.largestSaturatedPart(img, scaledDown, saturationThreshold, distanceToHighSaturation)
     console.log("Done finding saturated part!")
 
-    // appState.segmentationResults = { scaledDown, maskedImage, smallerMaskedImage }
     appState.segmentationResults = { maskedImage, smallerMaskedImage }
 }
 
