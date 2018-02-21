@@ -57,7 +57,7 @@ type State = {
         originalImgURL: string,
     } | null,
     segmentationResults: {
-        scaledDown: cv.Mat,
+        // scaledDown: cv.Mat,
         maskedImage: cv.Mat,
         smallerMaskedImage: cv.Mat
     } | null,
@@ -67,10 +67,13 @@ type State = {
         imgMarkers: Map<number, L.Marker>,
         mapMarkers: Map<number, L.Marker>,
     },
-    polygonsResults: {
+    polygonFinderResults: {
         colors: [number, number, number][],
         colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon}[]
-    } | null
+    } | null,
+    polygonSelectorResults: {
+
+    } | null,
 }
 
 let appState: State = {
@@ -82,7 +85,8 @@ let appState: State = {
         imgMarkers: new Map<number, L.Marker>(),
         mapMarkers: new Map<number, L.Marker>(),
     },
-    polygonsResults: null,
+    polygonFinderResults: null,
+    polygonSelectorResults: null,
 }
 
 const appRefs = {
@@ -103,6 +107,8 @@ function updateEnabledSteps() {
                appState.segmentationResults != null)
     toggleStep(<HTMLDivElement> document.querySelector("div#step4"),
                appState.correspondenceResults.correspondence != null)
+    toggleStep(<HTMLDivElement> document.querySelector("div#step5"),
+               appState.polygonFinderResults != null)
 }
 
 function uploadResultsChanged() {
@@ -180,7 +186,7 @@ function correspondenceResultsChanged() {
         throw new Error("polygonsMap is null")
     }
 
-    if (appState.correspondenceResults) {
+    if (appState.correspondenceResults.correspondence) {
         appRefs.polygonsMap.setView(getCenter(), 13)
     } else {
         // default location
@@ -188,16 +194,16 @@ function correspondenceResultsChanged() {
     }
 }
 
-function polygonsResultsChanged() {
+function polygonFinderResultsChanged() {
     const polygonsList = document.querySelector("div#polygons-list")!
     // Remove all children
     polygonsList.innerHTML = ""
 
-    if (appState.polygonsResults === null) {
+    if (appState.polygonFinderResults === null) {
         //
     } else {
-        for (const ix in appState.polygonsResults.colorPolygons) {
-            const poly = appState.polygonsResults.colorPolygons[ix]
+        for (const ix in appState.polygonFinderResults.colorPolygons) {
+            const poly = appState.polygonFinderResults.colorPolygons[ix]
             const listElement = document.createElement("div")
             renderPolygon(poly.colorIndex, ix, poly.polygon, listElement)
             polygonsList.appendChild(listElement)
@@ -366,7 +372,7 @@ function makeNumberInput(name: string, labelText: string, defaultValue: number):
     return {label, input}
 }
 
-function makePolygonSelector(wrapper: HTMLDivElement) {
+function makePolygonFinder(wrapper: HTMLDivElement) {
     const numColors = makeNumberInput("numColors", "Number of colors",
                                          Lib.defaultNumColors)
     const kMeansIterations = makeNumberInput("kMeansIterations", "K-means iterations",
@@ -379,9 +385,9 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
     button.onclick = () => {
         button.disabled = true
         const result = findPolygons(+numColors.input.value, +kMeansIterations.input.value)
-        appState.polygonsResults = { colorPolygons: result.polygons, colors: result.colors }
+        appState.polygonFinderResults = { colorPolygons: result.polygons, colors: result.colors }
         button.disabled = false
-        polygonsResultsChanged()
+        polygonFinderResultsChanged()
         updateEnabledSteps()
     }
 
@@ -396,7 +402,9 @@ function makePolygonSelector(wrapper: HTMLDivElement) {
     controls.appendChild(button)
 
     wrapper.appendChild(controls)
+}
 
+function makePolygonSelector(wrapper: HTMLDivElement) {
     const leafletDiv = <HTMLElement> document.querySelector("div#polygons-map-container")
     leafletDiv.style.height = "800px"
     leafletDiv.style.width = "100%"
@@ -481,13 +489,13 @@ function pixelToLatLng(pixel: L.LatLng) {
 
 function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polygon,
                        div: HTMLDivElement) {
-    if (appState.polygonsResults == null) {
-        throw new Error("polygonsResults is null, renderPolygon should not have been called")
+    if (appState.polygonFinderResults == null) {
+        throw new Error("polygonFinderResults is null, renderPolygon should not have been called")
     }
     div.classList.add("polygon-list-element")
 
     const colorPreview = document.createElement("div")
-    const color = appState.polygonsResults.colors[colorIndex]
+    const color = appState.polygonFinderResults.colors[colorIndex]
     colorPreview.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`
     colorPreview.classList.add("color-preview")
 
@@ -569,10 +577,11 @@ async function setupStorageStep() {
                 uploadResults: {
                     name: selectedFilename,
                     originalImg: Lib.deserializeMat(savedState.originalImg),
-                    originalImgURL: savedState.originalImgURL,
+                    // originalImgURL: savedState.originalImgURL,
+                    originalImgURL: "",
                 },
                 segmentationResults: savedState.scaledDown && savedState.maskedImage && savedState.smallerMaskedImage ? {
-                    scaledDown: Lib.deserializeMat(savedState.scaledDown),
+                    // scaledDown: Lib.deserializeMat(savedState.scaledDown),
                     maskedImage: Lib.deserializeMat(savedState.maskedImage),
                     smallerMaskedImage: Lib.deserializeMat(savedState.smallerMaskedImage),
                 } : null,
@@ -582,10 +591,11 @@ async function setupStorageStep() {
                     mapMarkers: deserializeMarkerMap(savedState.leafletMarkers),
                     imgMarkers: deserializeMarkerMap(savedState.konvaMarkers),
                 },
-                polygonsResults: savedState.colors && savedState.colorPolygons ? {
+                polygonFinderResults: savedState.colors && savedState.colorPolygons ? {
                     colors: savedState.colors,
                     colorPolygons: savedState.colorPolygons,
-                } : null
+                } : null,
+                polygonSelectorResults: null,
             }
 
             console.log(appState)
@@ -593,7 +603,7 @@ async function setupStorageStep() {
             uploadResultsChanged()
             segmentationResultsChanged()
             correspondenceResultsChanged()
-            polygonsResultsChanged()
+            polygonFinderResultsChanged()
 
             updateEnabledSteps()
         }
@@ -623,8 +633,9 @@ async function setupStorageStep() {
                 filename: appState.uploadResults.name,
                 originalImg: Lib.serializeMat(appState.uploadResults.originalImg),
                 originalImgURL: appState.uploadResults.originalImgURL,
-                scaledDown: appState.segmentationResults ?
-                    serializeIfNotNull(appState.segmentationResults.scaledDown) : null,
+                scaledDown: null,
+                // scaledDown: appState.segmentationResults ?
+                    // serializeIfNotNull(appState.segmentationResults.scaledDown) : null,
                 maskedImage: appState.segmentationResults ?
                     serializeIfNotNull(appState.segmentationResults.maskedImage) : null,
                 smallerMaskedImage: appState.segmentationResults ?
@@ -632,20 +643,31 @@ async function setupStorageStep() {
                 correspondence: appState.correspondenceResults.correspondence,
                 leafletMarkers: serializeMarkerMap(appState.correspondenceResults.mapMarkers),
                 konvaMarkers: serializeMarkerMap(appState.correspondenceResults.imgMarkers),
-                colors: appState.polygonsResults ? appState.polygonsResults.colors : null,
-                colorPolygons: appState.polygonsResults ? appState.polygonsResults.colorPolygons : null,
+                colors: appState.polygonFinderResults ? appState.polygonFinderResults.colors : null,
+                colorPolygons: appState.polygonFinderResults ? appState.polygonFinderResults.colorPolygons : null,
+            }
+            console.log("storedState is", storedState)
+            console.log("originalImg size in bytes is", storedState.originalImg.data.byteLength, "buffer size is", storedState.originalImg.data.buffer.byteLength)
+            if (storedState.maskedImage) {
+                console.log("maskedImage size in bytes is", storedState.maskedImage.data.byteLength, "buffer size is", storedState.originalImg.data.buffer.byteLength)
+            }
+            if (storedState.smallerMaskedImage) {
+                console.log("smallerMaskedImage size in bytes is", storedState.smallerMaskedImage.data.byteLength, "buffer size is", storedState.smallerMaskedImage.data.buffer.byteLength)
             }
 
             if (existingFilename.length == 0) {
-                db.mapFilenames.add({filename: appState.uploadResults.name})
+                await db.mapFilenames.add({filename: appState.uploadResults.name})
                 await db.maps.add(storedState)
                 console.log("added new record in db")
             } else {
                 // it should be in the database
                 const names = await db.maps.where({filename: appState.uploadResults.name}).toArray()
+                console.log("got names:", names)
                 const pk = names[0].id
-                await db.maps.update(pk!, storedState)
-                console.log("updated record in db")
+                // const updated = await db.maps.update(pk!, storedState)
+                const toPut: IStoredAppState = { ...storedState, id: pk! }
+                const updated = await db.maps.put(toPut)
+                console.log("updated record in db: ", updated)
             }
         } else {
             alert("Cannot save because you haven't uploaded a file!")
@@ -658,7 +680,8 @@ function main() {
     makeUploadStep(<HTMLDivElement> document.querySelector("div#step1"))
     makeSegmentationStep(<HTMLDivElement> document.querySelector("div#step2"))
     makeCorrespondenceMap(<HTMLDivElement> document.querySelector("div#step3"))
-    makePolygonSelector(<HTMLDivElement> document.querySelector("div#step4"))
+    makePolygonFinder(<HTMLDivElement> document.querySelector("div#step4"))
+    makePolygonSelector(<HTMLDivElement> document.querySelector("div#step5"))
 
     // Disable steps 2, 3, and 4 initially
     updateEnabledSteps()
@@ -686,7 +709,8 @@ function segmentationStep(maxComputeDimension: number, saturationThreshold: numb
     const {maskedImage, smallerMaskedImage} = Lib.largestSaturatedPart(img, scaledDown, saturationThreshold, distanceToHighSaturation)
     console.log("Done finding saturated part!")
 
-    appState.segmentationResults = { scaledDown, maskedImage, smallerMaskedImage }
+    // appState.segmentationResults = { scaledDown, maskedImage, smallerMaskedImage }
+    appState.segmentationResults = { maskedImage, smallerMaskedImage }
 }
 
 function findPolygons(numColors: number, kMeansIterations: number):

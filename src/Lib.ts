@@ -27,7 +27,16 @@ export type SerializedMat = {
 }
 
 export function serializeMat(mat: cv.Mat): SerializedMat {
-    return {rows: mat.rows, cols: mat.cols, type: mat.type(), data: mat.data}
+    // This is to make sure we don't try to serialize a matrix with a huge
+    // backing ArrayBuffer (which was giving me problems with IndexedDB)
+    let data
+    if (mat.data.byteLength == mat.data.buffer.byteLength) {
+        data = mat.data
+    } else {
+        const buf = mat.data.buffer.slice(mat.data.byteOffset, mat.data.byteOffset + mat.data.byteLength)
+        data = new Uint8Array(buf)
+    }
+    return { rows: mat.rows, cols: mat.cols, type: mat.type(), data }
 }
 
 export function deserializeMat(smat: SerializedMat): cv.Mat {

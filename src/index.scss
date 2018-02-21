@@ -94,6 +94,11 @@ div#main {
     div#step4 {
         grid-template-columns: repeat(3, 1fr);
         grid-gap: 10px;
+    }
+
+    div#step5 {
+        grid-template-columns: repeat(3, 1fr);
+        grid-gap: 10px;
 
         div#polygons-map-container {
             grid-row: 3;
