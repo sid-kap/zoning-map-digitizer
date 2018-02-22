@@ -231,6 +231,14 @@ function polygonFinderResultsChanged() {
                 polygonsList.appendChild(listElement)
             }
         }
+
+        const downloadLink = <HTMLLinkElement> document.querySelector("a#download-geojson")
+        downloadLink.onclick = e => {
+            // Don't go to top of page
+            e.preventDefault()
+
+            window.open("data:application/json," + JSON.stringify(exportGeoJSON()))
+        }
     }
 }
 
@@ -974,5 +982,28 @@ function toggleStep(div: HTMLElement, enable: boolean) {
     }
     for (const button of <HTMLButtonElement[]> Array.from(div.querySelectorAll("button"))) {
         button.disabled = !enable
+    }
+}
+
+function exportGeoJSON(): GeoJSON.FeatureCollection<GeoJSON.Polygon, { zone: string }> {
+    if (!appState.polygonSelectorResults || !appState.polygonFinderResults) {
+        throw new Error("polygonFinderResults or polygonSelectorResults does not exist")
+    }
+
+    const features: GeoJSON.Feature<GeoJSON.Polygon, { zone: string }>[] = []
+    for (const ix of appState.polygonSelectorResults.polygonLabels.keys()) {
+        const label = appState.polygonSelectorResults.polygonLabels.get(ix)!
+        const polygon = appState.polygonFinderResults.colorPolygons[ix].polygon
+        features.push({
+            type: "Feature",
+            geometry: polygon,
+            properties: {
+                zone: label
+            }
+        })
+    }
+    return {
+        type: "FeatureCollection",
+        features
     }
 }

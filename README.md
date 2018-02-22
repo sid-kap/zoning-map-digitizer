@@ -42,7 +42,7 @@ Ultimately it will be served from a web server, but a static server will suffice
 - [x] lump areas of similar color into polygon-shaped patches
 - [x] let the user select which patches are correct, assign a name/label to each one
 - [x] let the user enter in correspondences between points (row, col -> lat, long), use linear regression to find the transformation
-- [ ] make a GeoJSON of the colored polygons with the user's labels
+- [x] make a GeoJSON of the colored polygons with the user's labels
 
 ## TODO:
 - [x] make the algorithm parameters configurable (I made some `<input>` fields, but they don't do anything)

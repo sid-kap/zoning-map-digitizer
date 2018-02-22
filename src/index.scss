@@ -166,5 +166,10 @@ div#main {
                 cursor: pointer;
             }
         }
+
+        a#download-geojson {
+            grid-row: 5;
+            grid-column: 1 / 3;
+        }
     }
 }
