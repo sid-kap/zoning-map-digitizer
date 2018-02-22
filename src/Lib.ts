@@ -175,7 +175,7 @@ export function getColorPolygons(labeledByColorIndex: cv.Mat, colorIndex: number
                 const contoursFlattened = ([] as number[]).concat(...(contour.map(x => [x.col, x.row])))
                 const contourMat = cv.matFromArray(contour.length, 2, cv.CV_32S, contoursFlattened)
                 const approxCurve = new cv.Mat()
-                cv.approxPolyDP(contourMat, approxCurve, 3, true)
+                cv.approxPolyDP(contourMat, approxCurve, 1, true)
 
                 contours.push(approxCurve)
 

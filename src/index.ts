@@ -9,6 +9,7 @@ import * as tinycolor from "tinycolor2"
 const GeoSearch = require("leaflet-geosearch")
 import Dexie from "dexie"
 import turfArea from "@turf/area"
+import FileSaver = require("file-saver")
 
 
 // import ColorPolygonsWorker = require("worker-loader!./ColorPolygonsWorker.worker.ts")
@@ -233,11 +234,19 @@ function polygonFinderResultsChanged() {
         }
 
         const downloadLink = <HTMLLinkElement> document.querySelector("a#download-geojson")
+        downloadLink.target = "_blank"
         downloadLink.onclick = e => {
             // Don't go to top of page
             e.preventDefault()
 
-            window.open("data:application/json," + JSON.stringify(exportGeoJSON()))
+            const geojson = JSON.stringify(exportGeoJSON())
+            console.log("geojson.length =", geojson.length)
+            // downloadLink.href = "data:application/json," + geojson
+            // setPropAny(downloadLink, "download", "result.json")
+            const blob = new Blob([geojson], {type: "application/json;charset=utf-8"})
+            FileSaver.saveAs(blob, "result.json")
+            // downloadLink.download = "result.json"
+            // downloadLink.click()
         }
     }
 }
