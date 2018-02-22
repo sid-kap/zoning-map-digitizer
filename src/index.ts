@@ -8,7 +8,6 @@ import * as L from "leaflet"
 import * as tinycolor from "tinycolor2"
 const GeoSearch = require("leaflet-geosearch")
 import Dexie from "dexie"
-const geojsonArea = require("geojson-area")
 import turfArea from "@turf/area"
 
 
@@ -47,6 +46,10 @@ interface IStoredAppState {
     konvaMarkers:   Map<number, L.LatLng> | null,
     colors: Array<[number,number,number]> | null,
     colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon, area: number}[] | null,
+    polygonSelectorResults: {
+        polygonLabels: Map<number, string>,
+        deletedPolygons: Set<number>,
+    } | null,
 }
 
 interface IFilename {
@@ -75,7 +78,8 @@ type State = {
         colorPolygons: {colorIndex: number, polygon: GeoJSON.Polygon, area: number}[]
     } | null,
     polygonSelectorResults: {
-
+        polygonLabels: Map<number, string>,
+        deletedPolygons: Set<number>,
     } | null,
 }
 
@@ -199,17 +203,33 @@ function correspondenceResultsChanged() {
 
 function polygonFinderResultsChanged() {
     const polygonsList = document.querySelector("div#polygons-list")!
+    const labeledPolygonsList = document.querySelector("div#labeled-polygons-list")!
+    const deletedPolygonsList = document.querySelector("div#deleted-polygons-list")!
     // Remove all children
     polygonsList.innerHTML = ""
 
     if (appState.polygonFinderResults === null) {
         //
     } else {
-        for (const ix in appState.polygonFinderResults.colorPolygons) {
-            const poly = appState.polygonFinderResults.colorPolygons[ix]
+        if (!appState.polygonSelectorResults) {
+            // TODO Maybe this shouldn't go here, since this should be a pure function?
+            // I'm not sure...
+            appState.polygonSelectorResults = {
+                polygonLabels: new Map<number, string>(),
+                deletedPolygons: new Set<number>(),
+            }
+        }
+        for (let i = 0; i < appState.polygonFinderResults.colorPolygons.length; i++) {
+            const poly = appState.polygonFinderResults.colorPolygons[i]
             const listElement = document.createElement("div")
-            renderPolygon(poly.colorIndex, ix, poly.polygon, poly.area, listElement)
-            polygonsList.appendChild(listElement)
+            renderPolygon(poly.colorIndex, i, poly.polygon, poly.area, listElement)
+            if (appState.polygonSelectorResults.polygonLabels.has(i)) {
+                labeledPolygonsList.appendChild(listElement)
+            } else if (appState.polygonSelectorResults.deletedPolygons.has(i)) {
+                deletedPolygonsList.appendChild(listElement)
+            } else {
+                polygonsList.appendChild(listElement)
+            }
         }
     }
 }
@@ -509,10 +529,16 @@ function pixelToLatLng(pixel: L.LatLng) {
     return L.latLng(lat, lng)
 }
 
-function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polygon,
+function renderPolygon(colorIndex: number, index: number, polygon: GeoJSON.Polygon,
                        area: number, div: HTMLDivElement) {
+    if (appRefs.polygonsMap == null) {
+        throw new Error("somehow this polygon list element exists but polygonsMap does not")
+    }
     if (appState.polygonFinderResults == null) {
         throw new Error("polygonFinderResults is null, renderPolygon should not have been called")
+    }
+    if (!appState.polygonSelectorResults) {
+        throw new Error("polygonSelectorResults cannot be null!")
     }
     div.classList.add("polygon-list-element")
 
@@ -525,13 +551,9 @@ function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polyg
     title.classList.add("title")
     title.innerHTML = "Area: " + area + "m²"
 
-    div.dataset.polygonIndex = index
+    div.dataset.polygonIndex = "" + index
 
     const polyLatLng = L.GeoJSON.coordsToLatLngs(polygon.coordinates, 1)
-    // const polyLatLng = polygon.coordinates.map(
-    //     v => v.map( (point: L.LatLng) => pixelToLatLng(point)))
-    console.log(polyLatLng)
-
     const leafletPoly = L.polygon(polyLatLng,
                                   { color: tinycolor({r: color[0],
                                                       g: color[1],
@@ -540,18 +562,77 @@ function renderPolygon(colorIndex: number, index: string, polygon: GeoJSON.Polyg
         if (appRefs.polygonsMap == null) {
             throw new Error("somehow this polygon list element exists but polygonsMap does not")
         }
-        appRefs.polygonsMap.addLayer(leafletPoly)
+        if (!appState.polygonSelectorResults) {
+            throw new Error("polygonSelectorResults cannot be null!")
+        }
+        if (!appState.polygonSelectorResults.polygonLabels.has(index)) {
+            appRefs.polygonsMap.addLayer(leafletPoly)
+        }
     }
     div.onmouseleave = () => {
         if (appRefs.polygonsMap == null) {
             throw new Error("somehow this polygon list element exists but polygonsMap does not")
-
         }
-        appRefs.polygonsMap.removeLayer(leafletPoly)
+        if (!appState.polygonSelectorResults) {
+            throw new Error("polygonSelectorResults cannot be null!")
+        }
+        if (!appState.polygonSelectorResults.polygonLabels.has(index)) {
+            appRefs.polygonsMap.removeLayer(leafletPoly)
+        }
+    }
+
+    const origList = document.querySelector("div#polygons-list")!
+    const labeledList = document.querySelector("div#labeled-polygons-list")!
+    const deletedList = document.querySelector("div#deleted-polygons-list")!
+
+    const input = document.createElement("input")
+    input.classList.add("polygon-label")
+    input.placeholder = "Add zone label"
+    const label = appState.polygonSelectorResults.polygonLabels.get(index)
+    if (label) {
+        input.value = label
+        appRefs.polygonsMap.addLayer(leafletPoly)
+    }
+    input.onblur = () => {
+        if (!appState.polygonSelectorResults) {
+            throw new Error("polygonSelectorResults cannot be null!")
+        }
+        if (appRefs.polygonsMap == null) {
+            throw new Error("somehow this polygon list element exists but polygonsMap does not")
+        }
+        const val = input.value
+        if (val.length > 0) {
+            appState.polygonSelectorResults.polygonLabels.set(index, input.value)
+            if (div.parentElement != labeledList) {
+                labeledList.appendChild(div)
+            }
+            appRefs.polygonsMap.addLayer(leafletPoly)
+        } else {
+            appState.polygonSelectorResults.polygonLabels.delete(index)
+            if (div.parentElement != origList) {
+                origList.appendChild(div)
+            }
+        }
+    }
+
+    const cross = document.createElement("div")
+    cross.classList.add("polygon-cross")
+    cross.innerHTML = "✕"
+    cross.onclick = () => {
+        if (!appState.polygonSelectorResults) {
+            throw new Error("polygonSelectorResults cannot be null!")
+        }
+        appState.polygonSelectorResults.deletedPolygons.add(index)
+        appState.polygonSelectorResults.polygonLabels.delete(index)
+        if (div.parentElement != deletedList) {
+            deletedList.appendChild(div)
+        }
     }
 
     div.appendChild(colorPreview)
     div.appendChild(title)
+    div.appendChild(input)
+    div.appendChild(cross)
 }
 
 async function setupStorageStep() {
@@ -615,7 +696,7 @@ async function setupStorageStep() {
                     colors: savedState.colors,
                     colorPolygons: savedState.colorPolygons,
                 } : null,
-                polygonSelectorResults: null,
+                polygonSelectorResults: savedState.polygonSelectorResults,
             }
 
             console.log(appState)
@@ -662,15 +743,9 @@ async function setupStorageStep() {
                 konvaMarkers: serializeMarkerMap(appState.correspondenceResults.imgMarkers),
                 colors: appState.polygonFinderResults ? appState.polygonFinderResults.colors : null,
                 colorPolygons: appState.polygonFinderResults ? appState.polygonFinderResults.colorPolygons : null,
+                polygonSelectorResults: appState.polygonSelectorResults
             }
             console.log("storedState is", storedState)
-            console.log("originalImg size in bytes is", storedState.originalImg.data.byteLength, "buffer size is", storedState.originalImg.data.buffer.byteLength)
-            if (storedState.maskedImage) {
-                console.log("maskedImage size in bytes is", storedState.maskedImage.data.byteLength, "buffer size is", storedState.originalImg.data.buffer.byteLength)
-            }
-            if (storedState.smallerMaskedImage) {
-                console.log("smallerMaskedImage size in bytes is", storedState.smallerMaskedImage.data.byteLength, "buffer size is", storedState.smallerMaskedImage.data.buffer.byteLength)
-            }
 
             if (existingFilename.length == 0) {
                 await db.mapFilenames.add({filename: appState.uploadResults.name})
@@ -679,9 +754,7 @@ async function setupStorageStep() {
             } else {
                 // it should be in the database
                 const names = await db.maps.where({filename: appState.uploadResults.name}).toArray()
-                console.log("got names:", names)
                 const pk = names[0].id
-                // const updated = await db.maps.update(pk!, storedState)
                 const toPut: IStoredAppState = { ...storedState, id: pk! }
                 const updated = await db.maps.put(toPut)
                 console.log("updated record in db: ", updated)
@@ -845,6 +918,7 @@ function makeCorrespondenceMap(wrapper: HTMLDivElement) {
             appState.correspondenceResults.userInputCorrespondence = true
             matrixOutput.innerHTML = "Using inputted transformation: " + val
             correspondenceResultsChanged()
+            updateEnabledSteps()
         } else {
             appState.correspondenceResults.userInputCorrespondence = false
             console.log("Found", val, "not expected form of array")
