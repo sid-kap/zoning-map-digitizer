@@ -40,7 +40,7 @@ Ultimately it will be served from a web server, but a static server will suffice
 - [x] isolate a large, highly-saturated section in the middle of the map (zoning map always uses very saturated colors)
 - [x] quantize the colors of the map using K-Means clustering
 - [x] lump areas of similar color into polygon-shaped patches
-- [ ] let the user select which patches are correct, assign a name/label to each one
+- [x] let the user select which patches are correct, assign a name/label to each one
 - [x] let the user enter in correspondences between points (row, col -> lat, long), use linear regression to find the transformation
 - [ ] make a GeoJSON of the colored polygons with the user's labels
 
@@ -51,6 +51,7 @@ Ultimately it will be served from a web server, but a static server will suffice
 - [ ] show loading animation on segmentation step
 - [ ] show progress bar or something on findPolygons step (preferably, show detailed process like "in KMeans", "Processing color x/25", etc. because it's so slow)
 - [ ] if coordinates loaded from saved state, make the text box properly indicate it's using the backed-up coordinates (in fact, we can probably get rid of the input box at some point since we have app state storage now)
+- [ ] unshow polygon if deleted (I think it's staying around because the onmouseexit is never called when the user clicks on the X, so should do it there... or you know use React)
 
 Stuff to speed up the testing/development of program:
 - [x] Persistent storage of app state, so that you can reload it and not have to re-do steps (using IndexedDB)
@@ -58,5 +59,5 @@ Stuff to speed up the testing/development of program:
 
 UI stuff:
 - [x] Sort polygons in decreasing area order (and show the area, in acres or sq mi, in the list)
-- [ ] make way to enter in name of zone
+- [x] make way to enter in name of zone
 - [ ] make fast way of entering same zone for things of same color
